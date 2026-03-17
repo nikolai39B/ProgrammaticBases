@@ -3,7 +3,7 @@ import { BaseBuilder } from './builders/baseConfigBuilder';
 import { CardViewBuilder, TableViewBuilder, ListViewBuilder } from './builders/viewConfigBuilder';
 import { Property } from './types/baseTypes';
 
-import { debugGame, debugTask } from './debug';
+import { debugGame, debugTask, promiseTesting } from './debug';
 
 export type ProgrammaticBasesAPI = {
   //-- BUILDERS
@@ -18,6 +18,7 @@ export type ProgrammaticBasesAPI = {
   //-- METHODS
   debugGame: typeof debugGame;
   debugTask: typeof debugTask;
+  promiseTesting: typeof promiseTesting;
 };
 
 declare global {

@@ -5,11 +5,14 @@ import { BaseBuilder } from './builders/baseConfigBuilder';
 import { CardViewBuilder, TableViewBuilder, ListViewBuilder } from './builders/viewConfigBuilder';
 import { Property } from './types/baseTypes';
 
-import { debugGame, debugTask } from './debug';
+import { debugGame, debugTask, promiseTesting } from './debug';
 
 // Remember to rename these classes and interfaces!
 
 export default class ProgrammaticBases extends Plugin {
+	private _ready!: () => void;
+	public ready: Promise<void> = new Promise(res => (this._ready = res));
+
 	settings: ProgrammaticBasesSettings;
 
 	async onload() {
@@ -22,7 +25,8 @@ export default class ProgrammaticBases extends Plugin {
 			ListViewBuilder,
 			Property,
 			debugGame,
-			debugTask
+			debugTask,
+			promiseTesting
 		};
 
 		// This creates an icon in the left ribbon.

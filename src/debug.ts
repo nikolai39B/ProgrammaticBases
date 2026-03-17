@@ -29,3 +29,24 @@ export function debugTask() {
   let yaml = base.serialize();
   return yaml;
 }
+
+function printSuccess() {
+  console.log("success!!");
+}
+
+function printFailure() {
+  console.log("failure :(");
+}
+
+export async function promiseTesting(succeed: boolean) {
+  const myPromise = new Promise<void>((resolve, reject) => {
+    console.log(`input value: ${succeed}`);
+    if (succeed) {
+      resolve();
+    } else {
+      reject(new Error("didnt do it"));
+    }
+  });
+
+  myPromise.then(printSuccess, printFailure);
+}
