@@ -1,18 +1,18 @@
 import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
+import ProgrammaticBases from "./main";
 
-export interface MyPluginSettings {
+export interface ProgrammaticBasesSettings {
 	mySetting: string;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
+export const DEFAULT_SETTINGS: ProgrammaticBasesSettings = {
 	mySetting: 'default'
 }
 
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+export class ProgrammaticBasesSettingTab extends PluginSettingTab {
+	plugin: ProgrammaticBases;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: ProgrammaticBases) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}

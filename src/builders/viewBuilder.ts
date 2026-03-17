@@ -1,19 +1,14 @@
 // viewBuilders.ts
-
-import { BaseViewConfig, CardViewConfig, TableViewConfig, ListViewConfig } from './baseTypes'
-import { ViewType, ImageFitType, RowHeightType } from './baseTypes'
-import { FilterGroup, Property, PropertyOrder } from './baseTypes'
+import { ViewConfig, ImageFitType, CardViewConfig, RowHeightType, TableViewConfig, ListViewConfig } from '../types/viewConfig';
+import { FilterGroup, Property, PropertyOrder } from '../types/baseTypes';
 
 // ─── View Builders ────────────────────────────────────────────────────────────
 
 export class ViewBuilder {
-  protected config: BaseViewConfig
+  protected config: ViewConfig;
 
-  constructor(type: ViewType, name: string) {
-    if (!name.trim()) {
-      throw new Error('View name cannot be empty');
-    }
-    this.config = { type, name };
+  constructor(config: ViewConfig) {
+    this.config = config;
   }
 
   setFilter(filter: FilterGroup): this {
@@ -37,14 +32,14 @@ export class ViewBuilder {
     return this;
   }
 
-  build(): BaseViewConfig {
+  build(): ViewConfig {
     return this.config;
   }
 }
 
 export class CardViewBuilder extends ViewBuilder {
   constructor(name: string) {
-    super('card', name);
+    super(new CardViewConfig(name));
   }
 
   setCardSize(size: number): this {
@@ -74,7 +69,7 @@ export class CardViewBuilder extends ViewBuilder {
 
 export class TableViewBuilder extends ViewBuilder {
   constructor(name: string) {
-    super('table', name);
+    super(new TableViewConfig(name));
   }
 
   setRowHeight(height: RowHeightType): this {
@@ -96,7 +91,7 @@ export class TableViewBuilder extends ViewBuilder {
 
 export class ListViewBuilder extends ViewBuilder {
   constructor(name: string) {
-    super('list', name);
+    super(new ListViewConfig(name));
   }
 
   build(): ListViewConfig {
