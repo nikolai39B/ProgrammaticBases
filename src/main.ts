@@ -1,11 +1,11 @@
 import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
 import {DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "./settings";
 
-import { BaseBuilder } from './builders/baseBuilder';
-import { CardViewBuilder, TableViewBuilder, ListViewBuilder } from './builders/viewBuilder';
+import { BaseBuilder } from './builders/baseConfigBuilder';
+import { CardViewBuilder, TableViewBuilder, ListViewBuilder } from './builders/viewConfigBuilder';
 import { Property } from './types/baseTypes';
 
-import { debug } from './debug';
+import { debugGame, debugTask } from './debug';
 
 // Remember to rename these classes and interfaces!
 
@@ -21,7 +21,8 @@ export default class ProgrammaticBases extends Plugin {
 			TableViewBuilder,
 			ListViewBuilder,
 			Property,
-			debug
+			debugGame,
+			debugTask
 		};
 
 		// This creates an icon in the left ribbon.

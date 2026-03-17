@@ -1,9 +1,9 @@
 // types.d.ts
-import { BaseBuilder } from './builders/baseBuilder';
-import { CardViewBuilder, TableViewBuilder, ListViewBuilder } from './builders/viewBuilder';
+import { BaseBuilder } from './builders/baseConfigBuilder';
+import { CardViewBuilder, TableViewBuilder, ListViewBuilder } from './builders/viewConfigBuilder';
 import { Property } from './types/baseTypes';
 
-import { debug } from './debug';
+import { debugGame, debugTask } from './debug';
 
 export type ProgrammaticBasesAPI = {
   //-- BUILDERS
@@ -16,7 +16,8 @@ export type ProgrammaticBasesAPI = {
   Property: typeof Property;
 
   //-- METHODS
-  debug: typeof debug;
+  debugGame: typeof debugGame;
+  debugTask: typeof debugTask;
 };
 
 declare global {
