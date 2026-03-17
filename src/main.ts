@@ -10,24 +10,39 @@ import { debugGame, debugTask, promiseTesting } from './debug';
 // Remember to rename these classes and interfaces!
 
 export default class ProgrammaticBases extends Plugin {
-	private _ready!: () => void;
-	public ready: Promise<void> = new Promise(res => (this._ready = res));
+
+	private _loadSuccess: () => void;
+	private _loadFailed: (error: Error) => void;
+	
+	public loaded: Promise<void> = new Promise((resolve, reject) => {
+		this._loadSuccess = resolve;
+		this._loadFailed = reject;
+	});
 
 	settings: ProgrammaticBasesSettings;
 
 	async onload() {
-		await this.loadSettings();
+    try {
+		  await this.loadSettings();
 
-		window.programmaticBases = {
-			BaseBuilder,
-			CardViewBuilder,
-			TableViewBuilder,
-			ListViewBuilder,
-			Property,
-			debugGame,
-			debugTask,
-			promiseTesting
-		};
+		  window.programmaticBases = {
+		  	BaseBuilder,
+		  	CardViewBuilder,
+		  	TableViewBuilder,
+		  	ListViewBuilder,
+		  	Property,
+		  	debugGame,
+		  	debugTask,
+		  	promiseTesting
+		  };
+
+		  // TODO if something failed, like a plugin dependency, throw an error
+
+      this._loadSuccess();
+
+    } catch (e) {
+      this._loadFailed(e instanceof Error ? e : new Error(String(e)));
+    }
 
 		// This creates an icon in the left ribbon.
 		//this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
