@@ -11,18 +11,51 @@ import { debugGame, debugTask, promiseTesting } from './debug';
 
 export default class ProgrammaticBases extends Plugin {
 
-	private _loadSuccess: () => void;
-	private _loadFailed: (error: Error) => void;
-	
-	public loaded: Promise<void> = new Promise((resolve, reject) => {
-		this._loadSuccess = resolve;
-		this._loadFailed = reject;
-	});
+	//private _loadSuccess: () => void;
+	//private _loadFailed: (error: Error) => void;
+	//
+	//public loaded: Promise<void> = new Promise((resolve, reject) => {
+	//	this._loadSuccess = resolve;
+	//	this._loadFailed = reject;
+	//});
 
 	settings: ProgrammaticBasesSettings;
 
+  //finalizeSetup() {
+  //  console.log(`we finished setup!!`);
+  //}
+
 	async onload() {
+    console.log("ProgrammaticBases onload() begin")
     try {
+      //console.log((this.app as any).plugins.plugins)
+
+      // Check dependencies
+      //console.log("Checking for TaskBase")
+      //console.log((this.app as any).plugins.getPlugin("task-base"))
+      //await (this.app as any).plugins.plugins["task-base"].loaded;
+      //console.log("TaskBase loaded")
+
+      //console.log("waiting 3 sec");
+      //await new Promise(resolve => setTimeout(resolve, 3000));
+
+
+
+      //const tb = (this.app as any).plugins.plugins["task-base"];
+      //if (tb) {
+      //  console.log("found! - will complete setup now");
+      //  this.finalizeSetup();
+      //} else {
+      //  console.log("not found - will complete setup later");
+      //  this.registerEvent(
+      //      this.app.workspace.on("task-base:loaded" as any, () => {
+      //        this.finalizeSetup();
+      //      }
+      //    )
+      //  );
+      //}
+
+
 		  await this.loadSettings();
 
 		  window.programmaticBases = {
@@ -38,70 +71,74 @@ export default class ProgrammaticBases extends Plugin {
 
 		  // TODO if something failed, like a plugin dependency, throw an error
 
-      this._loadSuccess();
+      //this._loadSuccess();
+
+		  // This creates an icon in the left ribbon.
+		  //this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
+		  //	// Called when the user clicks the icon.
+		  //	new Notice('This is a notice!');
+		  //});
+  
+		  // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
+		  //const statusBarItemEl = this.addStatusBarItem();
+		  //statusBarItemEl.setText('Status bar text');
+  
+		  // This adds a simple command that can be triggered anywhere
+		  //this.addCommand({
+		  //	id: 'open-modal-simple',
+		  //	name: 'Open modal (simple)',
+		  //	callback: () => {
+		  //		new SampleModal(this.app).open();
+		  //	}
+		  //});
+		  //// This adds an editor command that can perform some operation on the current editor instance
+		  //this.addCommand({
+		  //	id: 'replace-selected',
+		  //	name: 'Replace selected content',
+		  //	editorCallback: (editor: Editor, view: MarkdownView) => {
+		  //		editor.replaceSelection('Sample editor command');
+		  //	}
+		  //});
+		  //// This adds a complex command that can check whether the current state of the app allows execution of the command
+		  //this.addCommand({
+		  //	id: 'open-modal-complex',
+		  //	name: 'Open modal (complex)',
+		  //	checkCallback: (checking: boolean) => {
+		  //		// Conditions to check
+		  //		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		  //		if (markdownView) {
+		  //			// If checking is true, we're simply "checking" if the command can be run.
+		  //			// If checking is false, then we want to actually perform the operation.
+		  //			if (!checking) {
+		  //				new SampleModal(this.app).open();
+		  //			}
+      //
+		  //			// This command will only show up in Command Palette when the check function returns true
+		  //			return true;
+		  //		}
+		  //		return false;
+		  //	}
+		  //});
+  
+		  // This adds a settings tab so the user can configure various aspects of the plugin
+		  this.addSettingTab(new ProgrammaticBasesSettingTab(this.app, this));
+  
+		  // If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
+		  // Using this function will automatically remove the event listener when this plugin is disabled.
+		  //this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+		  //	new Notice("Click");
+		  //});
+  
+		  // When registering intervals, this function will automatically clear the interval when the plugin is disabled.
+		  //this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+      
+      this.app.workspace.trigger("programmatic-bases:loaded");
 
     } catch (e) {
-      this._loadFailed(e instanceof Error ? e : new Error(String(e)));
+      this.app.workspace.trigger("programmatic-bases:loadFailed");
     }
-
-		// This creates an icon in the left ribbon.
-		//this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-		//	// Called when the user clicks the icon.
-		//	new Notice('This is a notice!');
-		//});
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		//const statusBarItemEl = this.addStatusBarItem();
-		//statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
-		//this.addCommand({
-		//	id: 'open-modal-simple',
-		//	name: 'Open modal (simple)',
-		//	callback: () => {
-		//		new SampleModal(this.app).open();
-		//	}
-		//});
-		//// This adds an editor command that can perform some operation on the current editor instance
-		//this.addCommand({
-		//	id: 'replace-selected',
-		//	name: 'Replace selected content',
-		//	editorCallback: (editor: Editor, view: MarkdownView) => {
-		//		editor.replaceSelection('Sample editor command');
-		//	}
-		//});
-		//// This adds a complex command that can check whether the current state of the app allows execution of the command
-		//this.addCommand({
-		//	id: 'open-modal-complex',
-		//	name: 'Open modal (complex)',
-		//	checkCallback: (checking: boolean) => {
-		//		// Conditions to check
-		//		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		//		if (markdownView) {
-		//			// If checking is true, we're simply "checking" if the command can be run.
-		//			// If checking is false, then we want to actually perform the operation.
-		//			if (!checking) {
-		//				new SampleModal(this.app).open();
-		//			}
-//
-		//			// This command will only show up in Command Palette when the check function returns true
-		//			return true;
-		//		}
-		//		return false;
-		//	}
-		//});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new ProgrammaticBasesSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		//this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-		//	new Notice("Click");
-		//});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		//this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+    
+    console.log("ProgrammaticBases onload() complete");
 
 	}
 
