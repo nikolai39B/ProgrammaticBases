@@ -5,7 +5,7 @@ import {
   TableViewBuilder,
   ListViewBuilder
 } from './builders/viewConfigBuilder';
-import { Property } from './types/baseTypes';
+import { Property } from './config/baseTypes';
 import { debugGame, debugTask, promiseTesting } from './debug';
 
 export class ProgrammaticBasesAPI {

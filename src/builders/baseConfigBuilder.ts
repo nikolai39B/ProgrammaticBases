@@ -1,8 +1,8 @@
 // baseBuilder.ts
 
-import { FilterGroup, Formula, Property } from '../types/baseTypes';
-import { BaseConfig } from '../types/baseConfig';
-import { BaseConfigOptions } from '../types/baseConfigOptions';
+import { FilterGroup, Formula, Property } from '../config/baseTypes';
+import { BaseConfig } from '../config/baseConfig';
+import { BaseConfigOptions } from '../config/baseConfigOptions';
 import { ViewConfigBuilder } from './viewConfigBuilder';
 
 /**

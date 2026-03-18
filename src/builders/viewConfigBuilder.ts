@@ -1,6 +1,6 @@
 // viewConfigBuilder.ts
 
-import { FilterGroup, PropertyOrder, Property } from '../types/baseTypes';
+import { FilterGroup, PropertyOrder, Property } from '../config/baseTypes';
 import {
   ViewConfigOptions,
   CardViewConfigOptions,
@@ -8,8 +8,8 @@ import {
   ListViewConfigOptions,
   ImageFitType,
   RowHeightType,
-} from '../types/viewConfigOptions';
-import { ViewConfig, CardViewConfig, TableViewConfig, ListViewConfig } from '../types/viewConfig';
+} from '../config/viewConfigOptions';
+import { ViewConfig, CardViewConfig, TableViewConfig, ListViewConfig } from '../config/viewConfig';
 
 // ─── Interface ────────────────────────────────────────────────────────────────
 
