@@ -1,55 +1,52 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "./settings";
-
+import { Plugin } from 'obsidian';
+import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "./settings";
+import { PluginDependencyManager } from '../../pluginUtilsCommon/dependency';
 
 export default class ProgrammaticBases extends Plugin {
 
-	settings: ProgrammaticBasesSettings;
+  settings: ProgrammaticBasesSettings;
 
-	async onload() {
+  async onload() {
     console.log("ProgrammaticBases onload() begin")
-    try {
-      const tb = (this.app as any).plugins.plugins["task-base"];
-      if (tb) {
-        console.log("from PB: task base already loaded");
-      } else {
-        console.log("from PB: waiting for task base to load");
-        this.registerEvent(
-          (this.app as any).workspace.on("task-base:loaded", () => {
-            console.log("from PB: task base loaded now");
-          })
-        );
-        this.registerEvent(
-          (this.app as any).workspace.on("task-base:loadFailed", () => {
-            console.log("from PB: task base failed to load");
-          })
-        );
-      }
 
+    // Load once dependencies are loaded
+    this.dependencyManager = new PluginDependencyManager(this);
+    //this.dependencyManager.addDependency("task-base", "task-base:loaded");
+    await this.dependencyManager.registerPluginLoader(() => this.loadPlugin() );
+    
+    console.log("ProgrammaticBases onload() complete");
+  }
+
+  private async loadPlugin() {
+    try {
       // Configure the settings
-		  await this.loadSettings();
-		  this.addSettingTab(new ProgrammaticBasesSettingTab(this.app, this));
-      
+      await this.loadSettings();
+      this.addSettingTab(new ProgrammaticBasesSettingTab(this.app, this));
+
       // Notify load success
       this.app.workspace.trigger("programmatic-bases:loaded");
 
+      console.log("ProgrammaticBases loaded");
     } catch (e) {
       // Notify load failure
-      this.app.workspace.trigger("programmatic-bases:loadFailed", e instanceof Error ? e : new Error(String(e)));
+      const error = e instanceof Error ? e : new Error(String(e));
+      this.app.workspace.trigger("programmatic-bases:loadFailed", error);
+      throw error;
     }
-    
-    console.log("ProgrammaticBases onload() complete");
+  }
 
-	}
+  onunload() {
+  }
 
-	onunload() {
-	}
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<ProgrammaticBasesSettings>);
+  }
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<ProgrammaticBasesSettings>);
-	}
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+
+  //-- ATTRIBUTES
+  private dependencyManager: PluginDependencyManager;
 }
