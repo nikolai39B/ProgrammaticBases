@@ -25,6 +25,8 @@
 		]
 	},
 	"include": [
-		"src/**/*.ts"
-, "types/types.d.ts"	]
+		"src/**/*.ts", 
+		"types/types.d.ts", 
+		"../pluginUtilsCommon/dependency.ts"
+	]
 }

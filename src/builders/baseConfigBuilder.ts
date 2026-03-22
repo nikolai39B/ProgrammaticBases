@@ -4,6 +4,7 @@ import { FilterGroup, Formula, Property } from '../config/baseTypes';
 import { BaseConfig } from '../config/baseConfig';
 import { BaseConfigOptions } from '../config/baseConfigOptions';
 import { ViewConfigBuilder } from './viewConfigBuilder';
+import { builderFactory } from '../config/viewConfigVisitor'
 
 /**
  * Builder for constructing a {@link BaseConfig} instance.
@@ -11,6 +12,8 @@ import { ViewConfigBuilder } from './viewConfigBuilder';
  * then assembles them into a {@link BaseConfig} on {@link build}.
  */
 export class BaseBuilder {
+  //-- ATTRIBUTES
+
   /**
    * The accumulated base configuration options.
    * Views are stored separately as builders and resolved during {@link build}.
@@ -22,6 +25,28 @@ export class BaseBuilder {
    * Each builder is resolved to a view config during {@link build}.
    */
   private viewBuilders: ViewConfigBuilder[] = [];
+
+
+  //-- CONSTRUCTOR
+
+  /**
+   * Creates a new {@link BaseBuilder} instance.
+   * If an existing {@link BaseConfigOptions} is provided, its properties are
+   * copied and its views are reconstructed as {@link ViewConfigBuilder} instances
+   * via the visitor pattern, enabling further modification before rebuilding.
+   *
+   * @param existing - Optional existing configuration to initialize from.
+   */
+  constructor(existing?: BaseConfigOptions) {
+    if (existing) {
+      const { views, ...rest } = existing;
+      this.options = { ...rest };
+      this.viewBuilders = views?.map(v => v.accept(builderFactory)) ?? [];
+    }
+  }
+
+
+  //-- MUTATORS
 
   /**
    * Sets the top-level filter group for this configuration.
@@ -74,14 +99,34 @@ export class BaseBuilder {
     return this;
   }
 
+  
+  //-- BUILD
+
   /**
-   * Builds and returns a {@link BaseConfig} from the accumulated options.
-   * All added view builders are built before being passed to the config.
+   * Validates the accumulated options without constructing the config.
+   * Throws early if the configuration is known to be invalid,
+   * avoiding the need to call {@link build} just to check validity.
+   *
+   * Currently checks that at least one view builder has been added,
+   * mirroring the constraint enforced by {@link BaseConfig}.
+   *
+   * @throws {Error} If no views have been added.
+   */
+  protected validate(): void {
+    if (this.viewBuilders.length === 0) {
+      throw new Error('Base must have at least one view');
+    }
+  }
+
+  /**
+   * Validates the accumulated options and builds a {@link BaseConfig}.
+   * All added view builders are built and included as views in the result.
    *
    * @returns The constructed {@link BaseConfig}.
    * @throws {Error} If no views have been added.
    */
   build(): BaseConfig {
+    this.validate();
     return new BaseConfig({
       ...this.options,
       views: this.viewBuilders.map(v => v.build()),

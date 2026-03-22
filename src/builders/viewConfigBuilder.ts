@@ -18,6 +18,7 @@ import { ViewConfig, CardViewConfig, TableViewConfig, ListViewConfig } from '../
  * Implemented structurally by all concrete view builder classes.
  */
 export interface ViewConfigBuilder {
+  //-- BUILD
   build(): ViewConfig;
 }
 
@@ -31,16 +32,38 @@ export interface ViewConfigBuilder {
  * @template T - The concrete {@link ViewConfigOptions} type this builder produces.
  */
 abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfigBuilder {
+  //-- ATTRIBUTES
+  
   /**
    * The accumulated view configuration options.
    * Subclasses narrow this type via `declare` to include their own fields.
    */
   protected options: Partial<T> = {} as Partial<T>;
 
+
+  //-- CONSTRUCTOR
+
+  /**
+   * Creates a new builder instance.
+   * If an existing {@link ViewConfigOptions} is provided, its fields are
+   * shallow-copied into {@link options} to allow further modification before building.
+   *
+   * @param existing - Optional existing view configuration to initialize from.
+   */
+  constructor(existing?: T) {
+    if (existing) {
+      this.options = { ...existing };
+    }
+  }
+
+
+  //-- MUTATORS
+
   /**
    * Sets the display name of the view.
+   * The name must not be empty or whitespace — this is enforced at {@link build} time.
    *
-   * @param name - The name to assign. Must not be empty or whitespace.
+   * @param name - The name to assign.
    * @returns The builder instance for chaining.
    */
   setName(name: string): this {
@@ -92,6 +115,9 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
     return this;
   }
 
+
+  //-- BUILD
+
   /**
    * Validates the accumulated options before building.
    * Subclasses should override this to add their own validation rules,
@@ -106,14 +132,6 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
   }
 
   /**
-   * Internal build step invoked by {@link build} after validation.
-   * Subclasses implement this to construct and return their specific {@link ViewConfig}.
-   *
-   * @returns The constructed view configuration.
-   */
-  protected abstract buildInternal(): ViewConfig;
-  
-  /**
    * Validates the accumulated options and builds the view configuration.
    * Subclasses must not override this method — extend {@link buildInternal} instead.
    *
@@ -124,6 +142,14 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
     this.validate();
     return this.buildInternal();
   }
+
+  /**
+   * Internal build step invoked by {@link build} after validation.
+   * Subclasses implement this to construct and return their specific {@link ViewConfig}.
+   *
+   * @returns The constructed view configuration.
+   */
+  protected abstract buildInternal(): ViewConfig;
 }
 
 // ─── Card View Builder ────────────────────────────────────────────────────────
@@ -133,8 +159,25 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
  * Extends {@link BaseViewBuilder} with card-specific setter methods.
  */
 export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
+  //-- ATTRIUBTES
+  
   /** Narrows the inherited {@link BaseViewBuilder.options} to {@link CardViewConfigOptions}. */
   protected declare options: Partial<CardViewConfigOptions>;
+
+
+  //-- CONSTRUCTOR
+
+  /**
+   * Creates a new {@link CardViewBuilder} instance.
+   *
+   * @param existing - Optional existing card view configuration to initialize from.
+   */
+  constructor(existing?: CardViewConfigOptions) {
+    super(existing);
+  }
+
+
+  //-- MUTATORS
 
   /**
    * Sets the size value controlling the width of each card.
@@ -180,11 +223,13 @@ export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
     return this;
   }
 
+
+  //-- BUILD
+
   /**
    * Builds and returns a {@link CardViewConfig} from the accumulated options.
    *
    * @returns The constructed {@link CardViewConfig}.
-   * @throws {Error} If `name` is empty or contains only whitespace.
    */
   protected buildInternal(): CardViewConfig {
     return new CardViewConfig(this.options as CardViewConfigOptions);
@@ -198,8 +243,25 @@ export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
  * Extends {@link BaseViewBuilder} with table-specific setter methods.
  */
 export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
+  //-- ATTRIBUTES
+  
   /** Narrows the inherited {@link BaseViewBuilder.options} to {@link TableViewConfigOptions}. */
   protected declare options: Partial<TableViewConfigOptions>;
+
+
+  //-- CONSTRUCTOR
+
+  /**
+   * Creates a new {@link TableViewBuilder} instance.
+   *
+   * @param existing - Optional existing table view configuration to initialize from.
+   */
+  constructor(existing?: TableViewConfigOptions) {
+    super(existing);
+  }
+
+
+  //-- MUTATORS
 
   /**
    * Sets the height of each row in the table.
@@ -223,11 +285,13 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
     return this;
   }
 
+
+  //-- BUILD
+
   /**
    * Builds and returns a {@link TableViewConfig} from the accumulated options.
    *
    * @returns The constructed {@link TableViewConfig}.
-   * @throws {Error} If `name` is empty or contains only whitespace.
    */
   protected buildInternal(): TableViewConfig {
     return new TableViewConfig(this.options as TableViewConfigOptions);
@@ -242,11 +306,24 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
  * list views rely solely on the base view options.
  */
 export class ListViewBuilder extends BaseViewBuilder<ListViewConfigOptions> {
+  //-- ATTRIBUTES
+  
+  /**
+   * Creates a new {@link ListViewBuilder} instance.
+   *
+   * @param existing - Optional existing list view configuration to initialize from.
+   */
+  constructor(existing?: ListViewConfigOptions) {
+    super(existing);
+  }
+
+
+  //-- BUILD
+
   /**
    * Builds and returns a {@link ListViewConfig} from the accumulated options.
    *
    * @returns The constructed {@link ListViewConfig}.
-   * @throws {Error} If `name` is empty or contains only whitespace.
    */
   protected buildInternal(): ListViewConfig {
     return new ListViewConfig(this.options as ListViewConfigOptions);

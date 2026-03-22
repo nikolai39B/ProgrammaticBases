@@ -9,6 +9,7 @@ import {
   ImageFitType,
   RowHeightType,
 } from './viewConfigOptions';
+import { ViewConfigVisitor } from './viewConfigVisitor';
 
 /** The supported view layout types. */
 export type ViewType = 'table' | 'cards' | 'list';
@@ -84,6 +85,8 @@ export abstract class ViewConfig {
 
     return result;
   }
+
+  abstract accept<R>(visitor: ViewConfigVisitor<R>): R;
 }
 
 // ─── Card View ────────────────────────────────────────────────────────────────
@@ -144,6 +147,10 @@ export class CardViewConfig extends ViewConfig {
 
     return result;
   }
+
+  accept<R>(visitor: ViewConfigVisitor<R>): R {
+    return visitor.visitCard(this);
+  }
 }
 
 // ─── Table View ───────────────────────────────────────────────────────────────
@@ -195,6 +202,10 @@ export class TableViewConfig extends ViewConfig {
 
     return result;
   }
+
+  accept<R>(visitor: ViewConfigVisitor<R>): R {
+    return visitor.visitTable(this);
+  }
 }
 
 // ─── List View ────────────────────────────────────────────────────────────────
@@ -213,5 +224,9 @@ export class ListViewConfig extends ViewConfig {
    */
   constructor(options: ListViewConfigOptions) {
     super('list', options);
+  }
+
+  accept<R>(visitor: ViewConfigVisitor<R>): R {
+    return visitor.visitList(this);
   }
 }

@@ -1,10 +1,26 @@
 import { Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "./settings";
 import { PluginDependencyManager } from '../../pluginUtilsCommon/dependency';
+import { BaseFileManager } from './fileManagement/baseFileManager';
+import { ProgrammaticBasesAPI } from 'api';
 
 export default class ProgrammaticBases extends Plugin {
+  //-- ATTRIBUTES
 
+  // File manager
+  private _fileManager: BaseFileManager;
+  get fileManager(): BaseFileManager {
+    return this._fileManager;
+  }
+  
+  // Settings
   settings: ProgrammaticBasesSettings;
+
+  // Instance
+  private static _instance: ProgrammaticBases;
+  static get instance(): ProgrammaticBases {
+    return ProgrammaticBases._instance;
+  }
 
   async onload() {
     console.log("ProgrammaticBases onload() begin")
@@ -19,6 +35,13 @@ export default class ProgrammaticBases extends Plugin {
 
   private async loadPlugin() {
     try {
+      // Set the instance
+      ProgrammaticBases._instance = this;
+      window.programmaticBases = new ProgrammaticBasesAPI();
+
+      // Create the file manager
+      this._fileManager = new BaseFileManager(this.app);
+
       // Configure the settings
       await this.loadSettings();
       this.addSettingTab(new ProgrammaticBasesSettingTab(this.app, this));
@@ -36,6 +59,7 @@ export default class ProgrammaticBases extends Plugin {
   }
 
   onunload() {
+    delete window.programmaticBases;
   }
 
   async loadSettings() {

@@ -16,6 +16,16 @@ export class Property {
     return `${this.source}.${this.name}`;
   }
 
+  static deserialize(raw: string): Property {
+    const dotIndex = raw.indexOf('.');
+    if (dotIndex === -1) {
+      throw new Error(`Invalid property string: "${raw}"`);
+    }
+    const source = raw.slice(0, dotIndex) as PropertySource;
+    const name = raw.slice(dotIndex + 1);
+    return new Property(name, source);
+  }
+
   equals(other: Property): boolean {
     return this.source === other.source && this.name === other.name;
   }
@@ -42,10 +52,40 @@ export class FilterGroup {
       )
     };
   }
+
+  static deserialize(raw: unknown): FilterGroup {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error(`Invalid FilterGroup: ${JSON.stringify(raw)}`);
+    }
+
+    const obj = raw as Record<string, unknown>;
+
+    const operators: FilterOperator[] = ['and', 'or', 'none'];
+    const operator = operators.find(op => op in obj);
+    if (!operator) {
+      throw new Error(`Expected one of ${operators.join(', ')}`);
+    }
+
+    const rawChildren = obj[operator];
+    if (!Array.isArray(rawChildren)) {
+      throw new Error(`Expected an array, got: ${JSON.stringify(rawChildren)}`);
+    }
+    const children = rawChildren.map(Filter.deserialize);
+    return new FilterGroup(operator, ...children);
+  }
 }
 
 export type Filter = FilterLeaf | FilterGroup;
 
+// Namespace to hold the Filter deserializer since Filter is a union type
+export namespace Filter {
+  export function deserialize(raw: unknown): Filter {
+    if (typeof raw === 'string') {
+      return raw as FilterLeaf;
+    }
+    return FilterGroup.deserialize(raw);
+  }
+}
 
 //-- SORTING & GROUPING
 export type Direction = 'ASC' | 'DESC';
@@ -65,6 +105,15 @@ export class PropertyOrder {
       direction: this.direction
     };
   }
+
+  static deserialize(raw: Record<string, unknown>): PropertyOrder {
+    const property = Property.deserialize(raw.property as string);
+    const direction = raw.direction as Direction;
+    if (direction !== 'ASC' && direction !== 'DESC') {
+      throw new Error(`Invalid direction: "${direction}"`);
+    }
+    return new PropertyOrder(property, direction);
+  }
 }
 
 
@@ -80,5 +129,9 @@ export class Formula {
 
   serialize(): Record<string, string> {
     return { [this.name]: this.content };
+  }
+
+  static deserialize(raw: Record<string, string>): Formula[] {
+    return Object.entries(raw).map(([name, content]) => new Formula(name, content));
   }
 }
