@@ -1,6 +1,7 @@
 // baseConfig.ts
 
-import { FilterGroup, Formula } from './baseTypes';
+import { FilterGroup } from './filter';
+import { Formula } from './formula';
 import { ViewConfig } from './viewConfig';
 import { BaseConfigOptions } from './baseConfigOptions';
 import * as yaml from 'js-yaml';

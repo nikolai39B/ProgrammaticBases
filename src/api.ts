@@ -1,11 +1,11 @@
 // api.ts
-import { BaseBuilder } from './builders/baseConfigBuilder';
+import { BaseBuilder } from './bases/baseConfigBuilder';
 import { 
   CardViewBuilder,
   TableViewBuilder,
   ListViewBuilder
-} from './builders/viewConfigBuilder';
-import { Property } from './config/baseTypes';
+} from './views/viewConfigBuilder';
+import { Property } from './bases/baseTypes';
 import ProgrammaticBases from './main';
 import { debugGame, debugTask, promiseTesting } from './debug';
 

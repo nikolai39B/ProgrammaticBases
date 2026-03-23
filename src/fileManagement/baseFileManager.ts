@@ -1,5 +1,5 @@
 import { App, TFile, normalizePath } from 'obsidian';
-import { BaseConfig } from '../config/baseConfig';
+import { BaseConfig } from '../bases/baseConfig';
 
 export class BaseFileManager {
     constructor(private readonly app: App) {}
