@@ -1,26 +1,41 @@
-import { Plugin } from 'obsidian';
-import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "./settings";
-import { PluginDependencyManager } from '../../pluginUtilsCommon/src/dependency';
-import { BaseFileManager } from './fileManagement/baseFileManager';
+import { Plugin, View } from 'obsidian';
+
 import { ProgrammaticBasesAPI } from 'api';
+import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
+
+import { CardViewInstaller } from 'bases/cardViewInstaller';
+import { ListViewInstaller } from 'bases/listViewInstaller';
+import { TableViewInstaller } from 'bases/tableViewInstaller';
+import { ViewTypeInstaller } from 'bases/viewTypeInstaller';
+import { ViewRegistry } from 'bases/viewType';
+
+import { BaseFileManager } from 'fileManagement/baseFileManager';
+
+import { PluginDependencyManager } from '../../pluginUtilsCommon/src/dependency';
+
+// ─── Programmatic Bases ──────────────────────────────────────────────────────
 
 export default class ProgrammaticBases extends Plugin {
   //-- ATTRIBUTES
 
-  // File manager
-  private _fileManager: BaseFileManager;
-  get fileManager(): BaseFileManager {
-    return this._fileManager;
-  }
-  
-  // Settings
-  settings: ProgrammaticBasesSettings;
-
   // Instance
   private static _instance: ProgrammaticBases;
-  static get instance(): ProgrammaticBases {
-    return ProgrammaticBases._instance;
-  }
+  static get instance(): ProgrammaticBases { return ProgrammaticBases._instance; }
+
+  // File manager
+  private _fileManager: BaseFileManager;
+  get fileManager(): BaseFileManager { return this._fileManager; }
+  
+  // Settings
+  private _settings: ProgrammaticBasesSettings;
+  get settings(): ProgrammaticBasesSettings { return this._settings; }
+
+  // View registry
+  private _viewRegistry: ViewRegistry
+  get viewRegistry(): ViewRegistry { return this._viewRegistry; }
+
+  // Installers
+  private _viewInstallers: ViewTypeInstaller[];
 
   async onload() {
     console.log("ProgrammaticBases onload() begin")
@@ -38,6 +53,15 @@ export default class ProgrammaticBases extends Plugin {
       // Set the instance
       ProgrammaticBases._instance = this;
       window.programmaticBases = new ProgrammaticBasesAPI();
+
+      // Install the views
+      this._viewRegistry = new ViewRegistry();
+      this._viewInstallers = [
+        new CardViewInstaller(),
+        new ListViewInstaller(),
+        new TableViewInstaller()
+      ];
+      this._viewInstallers.forEach(i => i.install(this.viewRegistry));
 
       // Create the file manager
       this._fileManager = new BaseFileManager(this.app);
@@ -63,11 +87,11 @@ export default class ProgrammaticBases extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<ProgrammaticBasesSettings>);
+    this._settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<ProgrammaticBasesSettings>);
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    await this.saveData(this._settings);
   }
 
 

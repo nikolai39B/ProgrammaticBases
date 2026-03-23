@@ -1,10 +1,12 @@
 // baseBuilder.ts
 
-import { FilterGroup, Formula, Property } from './baseTypes';
+import ProgrammaticBases from 'main';
 import { BaseConfig } from './baseConfig';
 import { BaseConfigOptions } from './baseConfigOptions';
-import { ViewConfigBuilder } from '../views/viewConfigBuilder';
-import { builderFactory } from '../views/configs/viewConfigVisitor'
+import { FilterGroup } from './filter'
+import { Formula } from './formula';
+import { Property } from './property';
+import { ViewConfigBuilder } from './viewConfigBuilder';
 
 // ─── Base View Builder ───────────────────────────────────────────────────────
 
@@ -44,7 +46,7 @@ export class BaseBuilder {
     if (existing) {
       const { views, ...rest } = existing;
       this.options = { ...rest };
-      this.viewBuilders = views?.map(v => builderFactory.dispatchTo(v)) ?? [];
+      this.viewBuilders = views?.map(v => ProgrammaticBases.instance.viewRegistry.createBuilder(v)) ?? [];
     }
   }
 

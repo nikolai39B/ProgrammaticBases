@@ -1,0 +1,13 @@
+// cardViewInstaller.ts
+import { CardViewBuilder } from "./cardViewBuilder";
+import { CardViewConfig } from "./cardViewConfig";
+import { ViewTypeInstallerBase } from "./viewTypeInstaller";
+
+// ─── Card View Installer ─────────────────────────────────────────────────────
+
+export class CardViewInstaller extends ViewTypeInstallerBase<'cards', CardViewConfig> {
+  readonly type = 'cards' as const;
+  createBuilder(config: CardViewConfig): CardViewBuilder {
+    return new CardViewBuilder(config);
+  }
+}

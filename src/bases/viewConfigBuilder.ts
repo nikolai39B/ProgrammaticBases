@@ -1,8 +1,8 @@
 import { FilterGroup } from './filter';
 import { Property } from './property';
 import { PropertyOrder } from './propertyOrder';
-import { ViewConfigOptions } from '../bases/viewConfigOptions';
 import { ViewConfig } from './viewConfig';
+import { ViewConfigOptions } from './viewConfigOptions';
 
 // ─── Interface ───────────────────────────────────────────────────────────────
 

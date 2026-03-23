@@ -1,6 +1,8 @@
-import { BaseBuilder } from './bases/baseConfigBuilder';
-import { CardViewBuilder, TableViewBuilder, ListViewBuilder } from './views/viewConfigBuilder';
-import { FilterGroup, Formula, Property } from './bases/baseTypes';
+import { BaseBuilder } from 'bases/baseConfigBuilder';
+import { CardViewBuilder } from 'bases/cardViewBuilder';
+import { FilterGroup } from 'bases/filter';
+import { Formula } from 'bases/formula';
+import { Property } from 'bases/property';
 
 export function debugGame() {
   let viewBuilder = new CardViewBuilder();
