@@ -1,6 +1,6 @@
 import { Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "./settings";
-import { PluginDependencyManager } from '../../pluginUtilsCommon/dependency';
+import { PluginDependencyManager } from '../../pluginUtilsCommon/src/dependency';
 import { BaseFileManager } from './fileManagement/baseFileManager';
 import { ProgrammaticBasesAPI } from 'api';
 

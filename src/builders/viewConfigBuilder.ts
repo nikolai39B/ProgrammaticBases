@@ -11,18 +11,19 @@ import {
 } from '../config/viewConfigOptions';
 import { ViewConfig, CardViewConfig, TableViewConfig, ListViewConfig } from '../config/viewConfig';
 
-// ─── Interface ────────────────────────────────────────────────────────────────
+// ─── Interface ───────────────────────────────────────────────────────────────
 
 /**
  * Represents any builder capable of producing a {@link ViewConfig}.
  * Implemented structurally by all concrete view builder classes.
  */
 export interface ViewConfigBuilder {
-  //-- BUILD
+  
+  // ── Build
   build(): ViewConfig;
 }
 
-// ─── Base Builder ─────────────────────────────────────────────────────────────
+// ─── Base View Builder ───────────────────────────────────────────────────────
 
 /**
  * Abstract base class for all view configuration builders.
@@ -32,7 +33,8 @@ export interface ViewConfigBuilder {
  * @template T - The concrete {@link ViewConfigOptions} type this builder produces.
  */
 abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfigBuilder {
-  //-- ATTRIBUTES
+  
+  // ── Attributes
   
   /**
    * The accumulated view configuration options.
@@ -41,7 +43,7 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
   protected options: Partial<T> = {} as Partial<T>;
 
 
-  //-- CONSTRUCTOR
+  // ── Constructor
 
   /**
    * Creates a new builder instance.
@@ -57,7 +59,7 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
   }
 
 
-  //-- MUTATORS
+  // ── Mutators
 
   /**
    * Sets the display name of the view.
@@ -116,7 +118,7 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
   }
 
 
-  //-- BUILD
+  // ── Build
 
   /**
    * Validates the accumulated options before building.
@@ -152,20 +154,21 @@ abstract class BaseViewBuilder<T extends ViewConfigOptions> implements ViewConfi
   protected abstract buildInternal(): ViewConfig;
 }
 
-// ─── Card View Builder ────────────────────────────────────────────────────────
+// ─── Card View Builder ───────────────────────────────────────────────────────
 
 /**
  * Builder for {@link CardViewConfig} instances.
  * Extends {@link BaseViewBuilder} with card-specific setter methods.
  */
 export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
-  //-- ATTRIUBTES
+  
+  // ── Attributes
   
   /** Narrows the inherited {@link BaseViewBuilder.options} to {@link CardViewConfigOptions}. */
   protected declare options: Partial<CardViewConfigOptions>;
 
 
-  //-- CONSTRUCTOR
+  // ── Constructor
 
   /**
    * Creates a new {@link CardViewBuilder} instance.
@@ -177,7 +180,7 @@ export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
   }
 
 
-  //-- MUTATORS
+  // ── Mutators
 
   /**
    * Sets the size value controlling the width of each card.
@@ -224,7 +227,7 @@ export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
   }
 
 
-  //-- BUILD
+  // ── Build
 
   /**
    * Builds and returns a {@link CardViewConfig} from the accumulated options.
@@ -236,20 +239,21 @@ export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
   }
 }
 
-// ─── Table View Builder ───────────────────────────────────────────────────────
+// ─── Table View Builder ──────────────────────────────────────────────────────
 
 /**
  * Builder for {@link TableViewConfig} instances.
  * Extends {@link BaseViewBuilder} with table-specific setter methods.
  */
 export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
-  //-- ATTRIBUTES
+  
+  // ── Attributes
   
   /** Narrows the inherited {@link BaseViewBuilder.options} to {@link TableViewConfigOptions}. */
   protected declare options: Partial<TableViewConfigOptions>;
 
 
-  //-- CONSTRUCTOR
+  // ── Constructor
 
   /**
    * Creates a new {@link TableViewBuilder} instance.
@@ -261,7 +265,7 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
   }
 
 
-  //-- MUTATORS
+  // ── Mutators
 
   /**
    * Sets the height of each row in the table.
@@ -286,7 +290,7 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
   }
 
 
-  //-- BUILD
+  // ── Build
 
   /**
    * Builds and returns a {@link TableViewConfig} from the accumulated options.
@@ -298,7 +302,7 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
   }
 }
 
-// ─── List View Builder ────────────────────────────────────────────────────────
+// ─── List View Builder ───────────────────────────────────────────────────────
 
 /**
  * Builder for {@link ListViewConfig} instances.
@@ -306,7 +310,8 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
  * list views rely solely on the base view options.
  */
 export class ListViewBuilder extends BaseViewBuilder<ListViewConfigOptions> {
-  //-- ATTRIBUTES
+  
+  // ── Constructor
   
   /**
    * Creates a new {@link ListViewBuilder} instance.
@@ -318,7 +323,7 @@ export class ListViewBuilder extends BaseViewBuilder<ListViewConfigOptions> {
   }
 
 
-  //-- BUILD
+  // ── Build
 
   /**
    * Builds and returns a {@link ListViewConfig} from the accumulated options.

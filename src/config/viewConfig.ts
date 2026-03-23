@@ -10,35 +10,75 @@ import {
   RowHeightType,
 } from './viewConfigOptions';
 import { ViewConfigVisitor } from './viewConfigVisitor';
+import { ViewType } from './viewTypeRegistry';
 
-/** The supported view layout types. */
-export type ViewType = 'table' | 'cards' | 'list';
+// ─── Constructor Interface ───────────────────────────────────────────────────
+
+/**
+ * Describes the static side of a {@link ViewConfig} subclass.
+ * Used by the view config registry to deserialize raw objects into
+ * typed view config instances without instantiating the class directly.
+ */
+interface ViewConfigConstructor {
+
+  // ── Attributes 
+
+  /** The view type string this class is responsible for. */
+  readonly type: ViewType;
+
+
+  // ── Serialization
+
+  /**
+   * Deserializes a raw plain object into a typed {@link ViewConfig} instance.
+   *
+   * @param raw - The raw object to deserialize parsed from YAML
+   * @returns A fully constructed {@link ViewConfig} instance.
+   */
+  deserialize(raw: Record<string, unknown>): ViewConfig;
+}
+
+// ─── View Base Class ─────────────────────────────────────────────────────────
 
 /**
  * Represents the shared configuration fields common to all view types.
- * Subclasses must define the specific {@link ViewType} they represent.
+ *
+ * Subclasses must satisfy {@link ViewConfigConstructor} on their static side
+ * to support type resolution and registration with the view config registry.
+ *
  * Serializes to a plain object suitable for YAML or JSON export.
  */
 export abstract class ViewConfig {
-  /** The layout type of this view. */
-  readonly type: ViewType;
+
+  // ── Attributes
 
   /** The configuration options for this view. */
   protected options: ViewConfigOptions;
 
+
+  // ── Constructor
+
   /**
    * Creates a new {@link ViewConfig} instance.
    *
-   * @param type - The layout type of this view.
    * @param options - The base view configuration options.
-   * @throws {Error} If `name` is empty or contains only whitespace.
+   * @throws {Error} If `options.name` is empty or contains only whitespace.
    */
-  constructor(type: ViewType, options: ViewConfigOptions) {
+  constructor(options: ViewConfigOptions) {
     if (!options.name.trim()) {
       throw new Error('View name cannot be empty');
     }
-    this.type = type;
     this.options = options;
+  }
+
+
+  // ── Accessors
+
+  /**
+   * The layout type of this view, derived from the subclass's `static readonly type` field.
+   */
+  get type(): ViewType {
+    return (this.constructor as unknown as ViewConfigConstructor).type;
   }
 
   /** The display name of this view. */
@@ -55,6 +95,9 @@ export abstract class ViewConfig {
 
   /** An optional ordered list of properties defining column or field display order. */
   get propertyOrder(): Property[] | undefined { return this.options.propertyOrder; }
+
+
+  // ── Serialization
 
   /**
    * Serializes this view configuration to a plain object.
@@ -86,6 +129,15 @@ export abstract class ViewConfig {
     return result;
   }
 
+
+  // ── Visitor
+
+  /**
+     * Accepts a visitor, dispatching to the appropriate visit method for this view type.
+     *
+     * @param visitor - The visitor to accept.
+     * @returns The value produced by the visitor.
+     */
   abstract accept<R>(visitor: ViewConfigVisitor<R>): R;
 }
 
@@ -97,18 +149,30 @@ export abstract class ViewConfig {
  * card size, image property, image fit, and aspect ratio.
  */
 export class CardViewConfig extends ViewConfig {
+
+  // ── Attributes
+
+  /** Identifies this class as the handler for the `'cards'` view type. */
+  static readonly type = 'cards' as const satisfies ViewType;
+
   /** Narrows the inherited {@link ViewConfig.options} to {@link CardViewConfigOptions}. */
   protected declare options: CardViewConfigOptions;
+
+
+  // ── Constructor
 
   /**
    * Creates a new {@link CardViewConfig} instance.
    *
    * @param options - The card view configuration options.
-   * @throws {Error} If `name` is empty or contains only whitespace.
+   * @throws {Error} If `options.name` is empty or contains only whitespace.
    */
   constructor(options: CardViewConfigOptions) {
-    super('cards', options);
+    super(options);
   }
+
+
+  // ── Accessors
 
   /** An optional size value controlling the width of each card. */
   get cardSize(): number | undefined { return this.options.cardSize; }
@@ -121,6 +185,9 @@ export class CardViewConfig extends ViewConfig {
 
   /** An optional aspect ratio for the card image (e.g. `1.5` for 3:2). */
   get imageAspectRatio(): number | undefined { return this.options.imageAspectRatio; }
+
+
+  // ── Serialization
 
   /**
    * Serializes this card view configuration to a plain object.
@@ -148,6 +215,26 @@ export class CardViewConfig extends ViewConfig {
     return result;
   }
 
+  /**
+   * Deserializes a raw plain object into a {@link CardViewConfig} instance.
+   *
+   * @param raw - The raw object to deserialize parsed from YAML
+   * @returns A fully constructed {@link CardViewConfig} instance.
+   */
+  static deserialize(raw: Record<string, unknown>): CardViewConfig {
+    // TODO: implement
+    throw new Error('Not implemented');
+  }
+
+
+  // ── Visitor
+
+  /**
+   * Accepts a visitor and dispatches to {@link ViewConfigVisitor.visitCard}.
+   *
+   * @param visitor - The visitor to accept.
+   * @returns The value produced by the visitor.
+   */
   accept<R>(visitor: ViewConfigVisitor<R>): R {
     return visitor.visitCard(this);
   }
@@ -161,18 +248,30 @@ export class CardViewConfig extends ViewConfig {
  * row height and per-column width sizing.
  */
 export class TableViewConfig extends ViewConfig {
+  
+  // ── Attributes
+  
+  /** Identifies this class as the handler for the `'table'` view type. */
+  static readonly type = 'table' as const satisfies ViewType;
+
   /** Narrows the inherited {@link ViewConfig.options} to {@link TableViewConfigOptions}. */
   protected declare options: TableViewConfigOptions;
+
+
+  // ── Constructor
 
   /**
    * Creates a new {@link TableViewConfig} instance.
    *
    * @param options - The table view configuration options.
-   * @throws {Error} If `name` is empty or contains only whitespace.
+   * @throws {Error} If `options.name` is empty or contains only whitespace.
    */
   constructor(options: TableViewConfigOptions) {
-    super('table', options);
+    super(options);
   }
+
+
+  // ── Accessors
 
   /** An optional setting controlling the height of each row in the table. */
   get rowHeight(): RowHeightType | undefined { return this.options.rowHeight; }
@@ -182,6 +281,9 @@ export class TableViewConfig extends ViewConfig {
    * Each entry controls the display width of a specific column.
    */
   get columnSize(): Map<string, number> | undefined { return this.options.columnSize; }
+
+  
+  // ── Serialization
 
   /**
    * Serializes this table view configuration to a plain object.
@@ -203,6 +305,26 @@ export class TableViewConfig extends ViewConfig {
     return result;
   }
 
+  /**
+   * Deserializes a raw plain object into a {@link TableViewConfig} instance.
+   *
+   * @param raw - The raw object to deserialize parsed from YAML
+   * @returns A fully constructed {@link TableViewConfig} instance.
+   */
+  static deserialize(raw: Record<string, unknown>): TableViewConfig {
+    // TODO: implement
+    throw new Error('Not implemented');
+  }
+
+
+  // ── Visitor
+
+  /**
+   * Accepts a visitor and dispatches to {@link ViewConfigVisitor.visitTable}.
+   *
+   * @param visitor - The visitor to accept.
+   * @returns The value produced by the visitor.
+   */
   accept<R>(visitor: ViewConfigVisitor<R>): R {
     return visitor.visitTable(this);
   }
@@ -216,16 +338,48 @@ export class TableViewConfig extends ViewConfig {
  * list views rely solely on the base view options.
  */
 export class ListViewConfig extends ViewConfig {
+  
+  // ── Attributes
+  
+  /** Identifies this class as the handler for the `'list'` view type. */
+  static readonly type = 'list' as const satisfies ViewType;
+
+
+  // ── Constr
+
   /**
    * Creates a new {@link ListViewConfig} instance.
    *
    * @param options - The list view configuration options.
-   * @throws {Error} If `name` is empty or contains only whitespace.
+   * @throws {Error} If `options.name` is empty or contains only whitespace.
    */
   constructor(options: ListViewConfigOptions) {
-    super('list', options);
+    super(options);
   }
 
+
+  // ── Serialization
+
+  /**
+   * Deserializes a raw plain object into a {@link ListViewConfig} instance.
+   *
+   * @param raw - The raw object to deserialize parsed from YAML
+   * @returns A fully constructed {@link ListViewConfig} instance.
+   */
+  static deserialize(raw: Record<string, unknown>): ListViewConfig {
+    // TODO: implement
+    throw new Error('Not implemented');
+  }
+
+
+  // ── Visitor
+
+  /**
+   * Accepts a visitor and dispatches to {@link ViewConfigVisitor.visitList}.
+   *
+   * @param visitor - The visitor to accept.
+   * @returns The value produced by the visitor.
+   */
   accept<R>(visitor: ViewConfigVisitor<R>): R {
     return visitor.visitList(this);
   }

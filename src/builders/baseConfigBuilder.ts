@@ -6,13 +6,16 @@ import { BaseConfigOptions } from '../config/baseConfigOptions';
 import { ViewConfigBuilder } from './viewConfigBuilder';
 import { builderFactory } from '../config/viewConfigVisitor'
 
+// ─── Base View Builder ───────────────────────────────────────────────────────
+
 /**
  * Builder for constructing a {@link BaseConfig} instance.
  * Accumulates top-level configuration options and a list of view builders,
  * then assembles them into a {@link BaseConfig} on {@link build}.
  */
 export class BaseBuilder {
-  //-- ATTRIBUTES
+  
+  // ── Attributes
 
   /**
    * The accumulated base configuration options.
@@ -27,7 +30,7 @@ export class BaseBuilder {
   private viewBuilders: ViewConfigBuilder[] = [];
 
 
-  //-- CONSTRUCTOR
+  // ── Constructor
 
   /**
    * Creates a new {@link BaseBuilder} instance.
@@ -46,7 +49,7 @@ export class BaseBuilder {
   }
 
 
-  //-- MUTATORS
+  // ── Mutators
 
   /**
    * Sets the top-level filter group for this configuration.
@@ -98,9 +101,9 @@ export class BaseBuilder {
     this.viewBuilders.push(view);
     return this;
   }
-
   
-  //-- BUILD
+
+  // ── Build
 
   /**
    * Validates the accumulated options without constructing the config.
