@@ -44,7 +44,7 @@ export class BaseBuilder {
     if (existing) {
       const { views, ...rest } = existing;
       this.options = { ...rest };
-      this.viewBuilders = views?.map(v => v.accept(builderFactory)) ?? [];
+      this.viewBuilders = views?.map(v => builderFactory.dispatchTo(v)) ?? [];
     }
   }
 

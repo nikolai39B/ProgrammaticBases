@@ -1,5 +1,4 @@
 import { ListViewConfigOptions } from './listViewConfigOptions';
-import { ViewConfigVisitor } from './viewConfigVisitor';
 import { ViewType } from './viewType';
 import { ViewConfig } from './viewConfig';
 
@@ -16,6 +15,11 @@ export class ListViewConfig extends ViewConfig {
 
   /** Identifies this class as the handler for the `'list'` view type. */
   static readonly type = 'list' as const satisfies ViewType;
+  
+  /** Narrows the inherited {@link ViewConfig.options} to {@link CardViewConfigOptions}. */
+  protected declare _options: ListViewConfigOptions;
+  get options(): ListViewConfigOptions { return this._options; }
+
 
   // ── Constructor
 
@@ -40,17 +44,5 @@ export class ListViewConfig extends ViewConfig {
   static deserialize(raw: Record<string, unknown>): ListViewConfig {
     // TODO: implement
     throw new Error('Not implemented');
-  }
-
-  // ── Visitor
-
-  /**
-   * Accepts a visitor and dispatches to {@link ViewConfigVisitor.visitList}.
-   *
-   * @param visitor - The visitor to accept.
-   * @returns The value produced by the visitor.
-   */
-  accept<R>(visitor: ViewConfigVisitor<R>): R {
-    return visitor.visitList(this);
   }
 }

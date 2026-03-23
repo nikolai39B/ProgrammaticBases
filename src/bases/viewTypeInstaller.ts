@@ -1,3 +1,9 @@
+import { ViewConfig } from "./viewConfig";
+import { ViewConfigBuilder } from "./viewConfigBuilder";
+import { ViewTypeRegistry } from "./viewType";
+
+// ─── View Type Installer ─────────────────────────────────────────────────────
+
 /**
  * Base class for registering a view type with the application.
  *
@@ -33,21 +39,7 @@ abstract class ViewTypeInstaller {
    * @param config - The configuration for the view being built.
    * @returns A new builder instance for the given config.
    */
-  abstract createBuilder(config: ViewConfig): ViewBuilder;
-
-  /**
-   * Returns the icon identifier for this view type.
-   *
-   * Override this method to provide a custom icon, for example based on
-   * a injected theme service or a property of the view config.
-   * Defaults to `'default-icon'`.
-   *
-   * @param config - The configuration for the view being built.
-   * @returns An icon identifier string.
-   */
-  createIcon(config: ViewConfig): string {
-    return 'default-icon';
-  }
+  abstract createBuilder(config: ViewConfig): ViewConfigBuilder;
 
   /**
    * Registers this view type with all relevant factories and the view type
@@ -57,9 +49,8 @@ abstract class ViewTypeInstaller {
    * need to override it.
    */
   run(): void {
-    viewTypeRegistry.register(this.type);
-    builderFactory.register(this.type, (config) => this.createBuilder(config));
-    iconFactory.register(this.type, (config) => this.createIcon(config));
+    ViewTypeRegistry[this.type] = true;
+    builderFactory.register(this.type, (conig) => this.createBuilder(config));
   }
 
   /**
@@ -72,7 +63,6 @@ abstract class ViewTypeInstaller {
    */
   uninstall(): void {
     builderFactory.unregister(this.type);
-    iconFactory.unregister(this.type);
     viewTypeRegistry.unregister(this.type);
   }
 }

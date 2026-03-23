@@ -1,5 +1,4 @@
 import { TableViewConfigOptions } from './tableViewConfigOptions';
-import { ViewConfigVisitor } from './viewConfigVisitor';
 import { ViewType } from './viewType';
 import { ViewConfig } from './viewConfig';
 
@@ -18,7 +17,8 @@ export class TableViewConfig extends ViewConfig {
   static readonly type = 'table' as const satisfies ViewType;
 
   /** Narrows the inherited {@link ViewConfig.options} to {@link TableViewConfigOptions}. */
-  protected declare options: TableViewConfigOptions;
+  protected declare _options: TableViewConfigOptions;
+  get options(): TableViewConfigOptions { return this._options; }
 
   // ── Constructor
 
@@ -74,17 +74,5 @@ export class TableViewConfig extends ViewConfig {
   static deserialize(raw: Record<string, unknown>): TableViewConfig {
     // TODO: implement
     throw new Error('Not implemented');
-  }
-
-  // ── Visitor
-
-  /**
-   * Accepts a visitor and dispatches to {@link ViewConfigVisitor.visitTable}.
-   *
-   * @param visitor - The visitor to accept.
-   * @returns The value produced by the visitor.
-   */
-  accept<R>(visitor: ViewConfigVisitor<R>): R {
-    return visitor.visitTable(this);
   }
 }

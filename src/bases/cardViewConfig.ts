@@ -1,6 +1,5 @@
 import { Property } from './property';
 import { CardViewConfigOptions } from './cardViewConfigOptions';
-import { ViewConfigVisitor } from './viewConfigVisitor';
 import { ViewType } from './viewType';
 import { ViewConfig } from './viewConfig';
 
@@ -19,7 +18,9 @@ export class CardViewConfig extends ViewConfig {
   static readonly type = 'cards' as const satisfies ViewType;
 
   /** Narrows the inherited {@link ViewConfig.options} to {@link CardViewConfigOptions}. */
-  protected declare options: CardViewConfigOptions;
+  protected declare _options: CardViewConfigOptions;
+  get options(): CardViewConfigOptions { return this._options; }
+
 
   // ── Constructor
 
@@ -84,17 +85,5 @@ export class CardViewConfig extends ViewConfig {
   static deserialize(raw: Record<string, unknown>): CardViewConfig {
     // TODO: implement
     throw new Error('Not implemented');
-  }
-
-  // ── Visitor
-
-  /**
-   * Accepts a visitor and dispatches to {@link ViewConfigVisitor.visitCard}.
-   *
-   * @param visitor - The visitor to accept.
-   * @returns The value produced by the visitor.
-   */
-  accept<R>(visitor: ViewConfigVisitor<R>): R {
-    return visitor.visitCard(this);
   }
 }

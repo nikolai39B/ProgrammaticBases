@@ -1,6 +1,8 @@
-// viewTypeRegistry.ts
+// viewType.ts
 
 import { ViewConfig } from "./viewConfig";
+import { ViewConfigBuilder } from "./viewConfigBuilder";
+import { ViewConfigOptions } from "./viewConfigOptions";
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 
@@ -9,37 +11,50 @@ export interface ViewTypeRegistry {
   'table': true;
   'list':  true;
 }
-
 export type ViewType = keyof ViewTypeRegistry;
 
-
-// viewTypeRegistry.ts
-
-//import { ViewConfig } from "./viewConfig";
-//import { ViewConfigVisitor } from "./viewConfigVisitor";
-
-/**
- * Registers all handlers for a given view type across all visitors.
- * Called once per view type, keeping each type's logic co-located.
- */
-export function registerViewType<T extends ViewConfig>(
-  type: ViewType,
-  handlers: {
-    builder: (config: T) => ViewConfigBuilder;
-    icon: (config: T) => IconType;
-    // ... other visitors
-  }
-): void {
-  builderFactory.register(type, handlers.builder);
-  iconFactory.register(type, handlers.icon);
+interface ViewRegistration<K extends keyof ViewTypeRegistry, C extends ViewConfigOptions> {
+  type: K;
+  createBuilder: (options: C) => ViewConfigBuilder;
 }
 
-registerViewType('cards', {
-  builder: (config: CardViewConfig) => new CardViewBuilder(config),
-  icon: (_config) => 'grid-icon',
-});
+//interface ViewRegistration<K extends keyof ViewTypeRegistry> {
+//  type: K;
+//  builder: ViewConfigBuilder<K>;
+//}
 
-registerViewType('table', {
-  builder: (config: TableViewConfig) => new TableViewBuilder(config),
-  icon: (_config) => 'table-icon',
-});
+class ViewRegistry {
+  private registrations = new Map<keyof ViewTypeRegistry, ViewRegistration<keyof ViewTypeRegistry, ViewConfigOptions>>();
+
+  register<K extends keyof ViewTypeRegistry, C extends ViewConfigOptions>(
+    registration: ViewRegistration<K, C>
+  ): void {
+    this.registrations.set(registration.type, registration);
+  }
+
+  createBuilder(config: ViewConfig): ViewConfigBuilder {
+    const registration = this.registrations.get(config.type);
+    if (!registration) throw new Error(`No builder registered for view type: ${config.type}`);
+    return registration.createBuilder(config.options);
+  }
+}
+
+//class ViewRegistry {
+//  private registrations = new Map<keyof ViewTypeRegistry, ViewRegistration<any>>();
+//
+//  register<K extends keyof ViewTypeRegistry>(registration: ViewRegistration<K>): void {
+//    this.registrations.set(registration.type, registration);
+//  }
+//
+//  unregister(type: keyof ViewTypeRegistry): void {
+//    this.registrations.delete(type);
+//  }
+//
+//  isViewType(value: string): value is keyof ViewTypeRegistry {
+//    return this.registrations.has(value as keyof ViewTypeRegistry);
+//  }
+//
+//  getBuilder<K extends keyof ViewTypeRegistry>(type: K): ViewConfigBuilder<K> {
+//    return this.registrations.get(type)?.builder;
+//  }
+//}

@@ -2,7 +2,6 @@ import { FilterGroup } from './filter';
 import { Property } from './property';
 import { PropertyOrder } from './propertyOrder';
 import { ViewConfigOptions } from './viewConfigOptions';
-import { ViewConfigVisitor } from './viewConfigVisitor';
 import { ViewType } from './viewType';
 
 // ─── Constructor Interface ───────────────────────────────────────────────────
@@ -45,7 +44,8 @@ export abstract class ViewConfig {
   // ── Attributes
 
   /** The configuration options for this view. */
-  protected options: ViewConfigOptions;
+  protected _options: ViewConfigOptions;
+  get options(): ViewConfigOptions { return this._options; }
 
   // ── Constructor
 
@@ -59,7 +59,7 @@ export abstract class ViewConfig {
     if (!options.name.trim()) {
       throw new Error('View name cannot be empty');
     }
-    this.options = options;
+    this._options = options;
   }
 
   // ── Accessors
@@ -117,14 +117,4 @@ export abstract class ViewConfig {
 
     return result;
   }
-
-  // ── Visitor
-
-  /**
-   * Accepts a visitor, dispatching to the appropriate visit method for this view type.
-   *
-   * @param visitor - The visitor to accept.
-   * @returns The value produced by the visitor.
-   */
-  abstract accept<R>(visitor: ViewConfigVisitor<R>): R;
 }
