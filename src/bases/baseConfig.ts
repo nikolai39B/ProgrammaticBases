@@ -1,10 +1,13 @@
 // baseConfig.ts
 
+import ProgrammaticBases from 'main';
+import { BaseConfigOptions } from './baseConfigOptions';
 import { FilterGroup } from './filter';
 import { Formula } from './formula';
+import { PropertyDisplay } from './propertyDisplay';
 import { ViewConfig } from './viewConfig';
-import { BaseConfigOptions } from './baseConfigOptions';
 import * as yaml from 'js-yaml';
+import { SerializationUtils } from 'utils/serializationUtils';
 
 /**
  * Represents the top-level configuration for a database or collection,
@@ -12,8 +15,14 @@ import * as yaml from 'js-yaml';
  * Serializes to a YAML string suitable for storage or export.
  */
 export class BaseConfig {
+  /** The list of views defined within this configuration. */
+  private _views: ViewConfig[];
+  get views(): ViewConfig[] { return this._views; }
+
   /** The configuration options for this base config. */
-  protected options: BaseConfigOptions;
+  private _options: BaseConfigOptions;
+  get options(): BaseConfigOptions { return this._options; }
+  
 
   /**
    * Creates a new {@link BaseConfig} instance.
@@ -21,68 +30,88 @@ export class BaseConfig {
    * @param options - The base configuration options.
    * @throws {Error} If no views are provided.
    */
-  constructor(options: BaseConfigOptions) {
-    if (options.views.length === 0) {
+  constructor(views: ViewConfig[], options: BaseConfigOptions) {
+    if (views.length === 0) {
       throw new Error('Base must have at least one view');
     }
-    this.options = options;
+    this._views = views;
+    this._options = options;
   }
 
-  /** The list of views defined within this configuration. */
-  get views(): ViewConfig[] { return this.options.views; }
 
   /** An optional top-level filter group applied across the entire configuration. */
-  get filters(): FilterGroup | undefined { return this.options.filters; }
+  get filters(): FilterGroup | undefined { return this._options.filters; }
 
   /** An optional list of formulas available within this configuration. */
-  get formulas(): Formula[] | undefined { return this.options.formulas; }
+  get formulas(): Formula[] | undefined { return this._options.formulas; }
 
   /**
-   * An optional map of serialized property keys to their display names.
-   * Each entry overrides how a property is labeled in the UI.
+   * An optional list of properties with their display names. Each entry overrides 
+   * how a property is labeled in the UI.
    */
-  get properties(): Map<string, string> | undefined { return this.options.properties; }
+  get properties(): PropertyDisplay[] | undefined { return this._options.properties; }
+
 
   /**
-   * Serializes this configuration to a YAML string.
+   * Serializes this configuration to a plain object.
    *
    * The output structure is as follows:
-   * - `filters` — the serialized top-level filter group, if present.
-   * - `formulas` — a flat record of formula name to content, if any formulas are defined.
-   * - `properties` — a record of serialized property key to `{ displayName }`, if any properties are defined.
    * - `views` — an array of serialized view configurations.
+   * - `filters` — the serialized top-level filter group, if present.
+   * - `formulas` — an array of serialized formula objects, if any formulas are defined.
+   * - `properties` — an array of serialized property display objects, if any properties are defined.
    *
-   * @returns A YAML string representing the full configuration.
+   * @returns A plain object representing the full configuration.
    */
-  serialize(): string {
+  serialize(): Record<string, unknown> {
     const obj: Record<string, unknown> = {};
-
-    // top-level filter group
+  
+    // Serialize attributes
+    obj.views = this.views.map(v => v.serialize());
     if (this.filters) {
       obj.filters = this.filters.serialize();
     }
-
-    // flatten formulas into a single name → content record
     if (this.formulas && this.formulas.length > 0) {
-      const formulas: Record<string, string> = {};
-      for (const formula of this.formulas) {
-        Object.assign(formulas, formula.serialize());
-      }
-      obj.formulas = formulas;
+      obj.formulas = SerializationUtils.serializeRecord(this.formulas, f => f.serialize());
     }
-
-    // flatten properties into serializedProperty → { displayName } record
-    if (this.properties && this.properties.size > 0) {
-      const properties: Record<string, { displayName: string }> = {};
-      this.properties.forEach((displayName, serializedProperty) => {
-        properties[serializedProperty] = { displayName };
-      });
-      obj.properties = properties;
+    if (this.properties && this.properties.length > 0) {
+      obj.properties = SerializationUtils.serializeRecord(this.properties, p => p.serialize());
     }
+  
+    return obj;
+  }
 
-    // serialize each view and collect into array
-    obj.views = this.views.map(v => v.serialize());
-
-    return yaml.dump(obj, { lineWidth: -1 });
+  /**
+   * Deserializes a plain object into a {@link BaseConfig} instance.
+   *
+   * @param raw - The raw object to deserialize. Expected to contain:
+   *   - `views` — an array of serialized view objects.
+   *   - `filters` — a serialized filter group, if present.
+   *   - `formulas` — an array of serialized formula objects, if present.
+   *   - `properties` — an array of serialized property display objects, if present.
+   *
+   * @returns The deserialized {@link BaseConfig} instance.
+   */
+  static deserialize(raw: Record<string, unknown>): BaseConfig {
+    const views = (raw.views as Record<string, unknown>[]).map(v =>
+      ProgrammaticBases.instance.viewRegistry.deserialize(v));
+  
+    const filters = raw.filters ?
+      FilterGroup.deserialize(raw.filters as Record<string, unknown>) :
+      undefined;
+  
+    const formulas = raw.formulas ?
+      SerializationUtils.deserializeRecord<Formula>(
+        raw.formulas as Record<string, unknown>,
+        Formula.deserialize) :
+      undefined;
+  
+    const properties = raw.properties ?
+      SerializationUtils.deserializeRecord<PropertyDisplay>(
+        raw.properties as Record<string, unknown>,
+        PropertyDisplay.deserialize) :
+      undefined;
+  
+    return new BaseConfig(views, { filters, formulas, properties });
   }
 }

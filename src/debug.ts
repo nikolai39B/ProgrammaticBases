@@ -1,13 +1,16 @@
+import { BaseConfig } from 'bases/baseConfig';
 import { BaseBuilder } from 'bases/baseConfigBuilder';
 import { CardViewBuilder } from 'bases/cardViewBuilder';
 import { FilterGroup } from 'bases/filter';
 import { Formula } from 'bases/formula';
 import { Property } from 'bases/property';
+import * as yaml from 'js-yaml';
+import ProgrammaticBases from 'main';
 
 export function debugGame() {
   let viewBuilder = new CardViewBuilder();
   viewBuilder.setName('Game');
-  viewBuilder.setFilter(new FilterGroup('and', 'file.hasProperty("year_rank")'));
+  viewBuilder.setFilter(new FilterGroup('and', [ 'file.hasProperty("year_rank")' ]));
 
   let baseBuilder = new BaseBuilder();
   baseBuilder.addView(viewBuilder);
@@ -21,7 +24,7 @@ export function debugGame() {
 export function debugTask() {
   let viewBuilder = new CardViewBuilder();
   viewBuilder.setName('Task');
-  viewBuilder.setFilter(new FilterGroup('and', 'file.hasProperty("status")'));
+  viewBuilder.setFilter(new FilterGroup('and', [ 'file.hasProperty("status")' ]));
 
   let baseBuilder = new BaseBuilder();
   baseBuilder.addView(viewBuilder);
@@ -51,4 +54,57 @@ export async function promiseTesting(succeed: boolean) {
   });
 
   myPromise.then(printSuccess, printFailure);
+}
+
+export async function testJsYaml() {
+  const formula: Record<string, string> = {
+    "resolved": "status == true"
+  }
+  
+  const view: Record<string, any> = {
+    name: "all tasks",
+    groupBy: {
+      property: "file.path",
+      direction: "ASC"
+    },
+    formulas: [
+      formula
+    ]
+  }
+
+  const base: Record<string, string> = {
+    filter: "nothing!!!"
+  }
+
+  const v: any = {
+    views: [
+      view
+    ],
+    
+  }
+  
+
+  console.log(v)
+  //console.log(Object.entries(v))
+
+  console.log(yaml.dump(v, { lineWidth: -1 }));
+  //console.log(yaml.dump(Object.entries(v), { lineWidth: -1 }));
+
+  console.log(yaml.load(yaml.dump(v, { lineWidth: -1 })));
+  //console.log(yaml.load(yaml.dump(Object.entries(v), { lineWidth: -1 })));
+}
+
+export async function testJsYamlLoad() {
+  
+  const path = "Bases\\testBase.base";
+  const yamlString = await ProgrammaticBases.instance.app.vault.adapter.read(path);
+  const yamlObj1 = yaml.load(yamlString);
+  const baseConfig = BaseConfig.deserialize(yamlObj1 as Record<string, unknown>);
+  const yamlObj2 = baseConfig.serialize();
+
+  const yamlStringTr = yaml.dump(yamlObj2, { lineWidth: -1 });
+    
+  console.log(yamlString)
+  console.log(baseConfig);
+  console.log(yamlStringTr);
 }

@@ -1,7 +1,9 @@
 // baseConfigOptions.ts
 
-import { FilterGroup, Formula } from './baseTypes';
-import { ViewConfig } from './viewConfig';
+import { FilterGroup } from './filter';
+import { Formula } from './formula';
+import { PropertyDisplay } from './propertyDisplay';
+//import { ViewConfigOptions } from './viewConfigOptions';
 
 /**
  * Options for constructing a {@link BaseConfig} instance.
@@ -9,7 +11,7 @@ import { ViewConfig } from './viewConfig';
  */
 export interface BaseConfigOptions {
   /** The list of views defined within this configuration. Must not be empty. */
-  views: ViewConfig[];
+  //views: ViewConfigOptions[];
 
   /** An optional top-level filter group applied across the entire configuration. */
   filters?: FilterGroup;
@@ -18,8 +20,8 @@ export interface BaseConfigOptions {
   formulas?: Formula[];
 
   /**
-   * An optional map of serialized property keys to their display names.
-   * Each entry overrides how a property is labeled in the UI.
+   * An optional list of properties with their display names. Each entry overrides 
+   * how a property is labeled in the UI.
    */
-  properties?: Map<string, string>;
+  properties?: PropertyDisplay[];
 }

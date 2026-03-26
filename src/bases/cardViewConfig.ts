@@ -58,22 +58,24 @@ export class CardViewConfig extends ViewConfig {
    * @returns A plain object representing this card view configuration.
    */
   serialize(): Record<string, unknown> {
-    const result = super.serialize();
+    // Serialize the base class properties
+    const obj = super.serialize();
 
+    // Serialize attributes
     if (this.cardSize != null) {
-      result.cardSize = this.cardSize;
+      obj.cardSize = this.cardSize;
     }
     if (this.image) {
-      result.image = this.image.serialize();
+      obj.image = this.image.serialize();
     }
     if (this.imageFit) {
-      result.imageFit = this.imageFit;
+      obj.imageFit = this.imageFit;
     }
     if (this.imageAspectRatio != null) {
-      result.imageAspectRatio = this.imageAspectRatio;
+      obj.imageAspectRatio = this.imageAspectRatio;
     }
 
-    return result;
+    return obj;
   }
 
   /**
@@ -83,7 +85,20 @@ export class CardViewConfig extends ViewConfig {
    * @returns A fully constructed {@link CardViewConfig} instance.
    */
   static deserialize(raw: Record<string, unknown>): CardViewConfig {
-    // TODO: implement
-    throw new Error('Not implemented');
+    // Deserialize base class properties
+    const base = ViewConfig.deserialize(raw);
+
+    // Deserialize attributes
+    const image = raw.image
+      ? Property.deserialize(raw.image as string)
+      : undefined;
+
+    return new CardViewConfig({
+      ...base,
+      cardSize: raw.cardSize as number | undefined,
+      image: image,
+      imageFit: raw.imageFit as CardViewConfigOptions.ImageFitType | undefined,
+      imageAspectRatio: raw.imageAspectRatio as number | undefined,
+    });
   }
 }

@@ -53,16 +53,18 @@ export class TableViewConfig extends ViewConfig {
    * @returns A plain object representing this table view configuration.
    */
   serialize(): Record<string, unknown> {
-    const result = super.serialize();
+    // Serialize the base class properties
+    const obj = super.serialize();
 
+    // Serialize attributes
     if (this.rowHeight) {
-      result.rowHeight = this.rowHeight;
+      obj.rowHeight = this.rowHeight;
     }
     if (this.columnSize) {
-      result.columnSize = Object.fromEntries(this.columnSize);
+      obj.columnSize = Object.fromEntries(this.columnSize);
     }
 
-    return result;
+    return obj;
   }
 
   /**
@@ -72,7 +74,18 @@ export class TableViewConfig extends ViewConfig {
    * @returns A fully constructed {@link TableViewConfig} instance.
    */
   static deserialize(raw: Record<string, unknown>): TableViewConfig {
-    // TODO: implement
-    throw new Error('Not implemented');
+    // Deserialize base class properties
+    const base = ViewConfig.deserialize(raw);
+  
+    // Deserialize attributes
+    const columnSize = raw.columnSize
+      ? new Map(Object.entries(raw.columnSize as Record<string, number>))
+      : undefined;
+  
+    return new TableViewConfig({
+      ...base,
+      rowHeight: raw.rowHeight as TableViewConfigOptions.RowHeightType | undefined,
+      columnSize,
+    });
   }
 }

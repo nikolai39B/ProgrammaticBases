@@ -16,7 +16,7 @@ export class ListViewConfig extends ViewConfig {
   /** Identifies this class as the handler for the `'list'` view type. */
   static readonly type = 'list' as const satisfies ViewType;
   
-  /** Narrows the inherited {@link ViewConfig.options} to {@link CardViewConfigOptions}. */
+  /** Narrows the inherited {@link ViewConfig.options} to {@link ListViewConfigOptions}. */
   protected declare _options: ListViewConfigOptions;
   get options(): ListViewConfigOptions { return this._options; }
 
@@ -36,13 +36,35 @@ export class ListViewConfig extends ViewConfig {
   // ── Serialization
 
   /**
+   * Serializes this list view configuration to a plain object.
+   * Extends the base serialization with list-specific fields.
+   * Only fields that are defined are included in the output.
+   *
+   * @returns A plain object representing this list view configuration.
+   */
+  serialize(): Record<string, unknown> {
+    // Serialize the base class properties
+    const obj = super.serialize();
+
+    // TODO add list specific properties
+
+    return obj;
+  }
+
+  /**
    * Deserializes a raw plain object into a {@link ListViewConfig} instance.
    *
    * @param raw - The raw object to deserialize parsed from YAML.
    * @returns A fully constructed {@link ListViewConfig} instance.
    */
   static deserialize(raw: Record<string, unknown>): ListViewConfig {
-    // TODO: implement
-    throw new Error('Not implemented');
+    // Deserialize base class properties
+    const base = ViewConfig.deserialize(raw);
+
+    // TODO add list specific properties
+
+    return new ListViewConfig({
+      ...base
+    });
   }
 }

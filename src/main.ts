@@ -7,7 +7,7 @@ import { CardViewInstaller } from 'bases/cardViewInstaller';
 import { ListViewInstaller } from 'bases/listViewInstaller';
 import { TableViewInstaller } from 'bases/tableViewInstaller';
 import { ViewTypeInstaller } from 'bases/viewTypeInstaller';
-import { ViewRegistry } from 'bases/viewType';
+import { ViewRegistry } from 'bases/viewRegistry';
 
 import { BaseFileManager } from 'fileManagement/baseFileManager';
 

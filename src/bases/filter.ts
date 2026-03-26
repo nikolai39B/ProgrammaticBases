@@ -32,7 +32,7 @@ export class FilterGroup {
    * @param operator - The logical operator to apply.
    * @param children - The child filters to combine.
    */
-  constructor(operator: FilterGroup.Operator, ...children: Filter[]) {
+  constructor(operator: FilterGroup.Operator, children: Filter[]) {
     this.operator = operator;
     this.children = children;
   }
@@ -47,11 +47,12 @@ export class FilterGroup {
    * @returns The serialized filter group object.
    */
   serialize(): Record<string, unknown> {
-    return {
-      [this.operator]: this.children.map(child =>
+    // Serialize the children
+    const serilaizedChildren = this.children.map(child =>
         typeof child === 'string' ? child : child.serialize()
-      )
-    };
+      );
+    
+    return { [this.operator]: serilaizedChildren };
   }
 
   /**
@@ -61,24 +62,22 @@ export class FilterGroup {
    * @returns The deserialized {@link FilterGroup}.
    * @throws {Error} If the input is not an object, lacks a valid operator, or children is not an array.
    */
-  static deserialize(raw: unknown): FilterGroup {
-    if (typeof raw !== 'object' || raw === null) {
-      throw new Error(`Invalid FilterGroup: ${JSON.stringify(raw)}`);
-    }
-
-    const obj = raw as Record<string, unknown>;
-
-    const operator = FilterGroup.operators.find(op => op in obj);
+  static deserialize(raw: Record<string, unknown>): FilterGroup {
+    // Get the group's operator
+    const operator = FilterGroup.operators.find(op => op in raw);
     if (!operator) {
       throw new Error(`Expected one of ${FilterGroup.operators.join(', ')}`);
     }
 
-    const rawChildren = obj[operator];
+    // Get the children
+    const rawChildren = raw[operator];
     if (!Array.isArray(rawChildren)) {
       throw new Error(`Expected an array, got: ${JSON.stringify(rawChildren)}`);
     }
-    const children = rawChildren.map(Filter.deserialize);
-    return new FilterGroup(operator, ...children);
+
+    // Deserialize the children recursively
+    const children = rawChildren.map(c => Filter.deserialize(c));
+    return new FilterGroup(operator, children);
   }
 }
 
@@ -117,9 +116,12 @@ export namespace Filter {
    * @returns The deserialized {@link Filter}.
    */
   export function deserialize(raw: unknown): Filter {
+    // If the raw object is a string, use it directly
     if (typeof raw === 'string') {
       return raw as FilterLeaf;
     }
-    return FilterGroup.deserialize(raw);
+
+    // Othewise, deserialize
+    return FilterGroup.deserialize(raw as Record<string, unknown>);
   }
 }

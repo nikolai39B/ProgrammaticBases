@@ -7,6 +7,7 @@ import { FilterGroup } from './filter'
 import { Formula } from './formula';
 import { Property } from './property';
 import { ViewConfigBuilder } from './viewConfigBuilder';
+import { PropertyDisplay } from './propertyDisplay';
 
 // ─── Base View Builder ───────────────────────────────────────────────────────
 
@@ -20,33 +21,33 @@ export class BaseBuilder {
   // ── Attributes
 
   /**
-   * The accumulated base configuration options.
-   * Views are stored separately as builders and resolved during {@link build}.
-   */
-  protected options: Partial<Omit<BaseConfigOptions, 'views'>> = {};
-
-  /**
    * The list of view builders added to this configuration.
    * Each builder is resolved to a view config during {@link build}.
    */
   private viewBuilders: ViewConfigBuilder[] = [];
+
+  /**
+   * The accumulated base configuration options.
+   * Views are stored separately as builders and resolved during {@link build}.
+   */
+  protected options: BaseConfigOptions = {};
 
 
   // ── Constructor
 
   /**
    * Creates a new {@link BaseBuilder} instance.
-   * If an existing {@link BaseConfigOptions} is provided, its properties are
+   * If an existing {@link BaseConfig} is provided, its properties are
    * copied and its views are reconstructed as {@link ViewConfigBuilder} instances
    * via the visitor pattern, enabling further modification before rebuilding.
    *
    * @param existing - Optional existing configuration to initialize from.
    */
-  constructor(existing?: BaseConfigOptions) {
+  constructor(existing?: BaseConfig) {
     if (existing) {
-      const { views, ...rest } = existing;
-      this.options = { ...rest };
-      this.viewBuilders = views?.map(v => ProgrammaticBases.instance.viewRegistry.createBuilder(v)) ?? [];
+      this.viewBuilders = existing.views?.map(
+        v => ProgrammaticBases.instance.viewRegistry.createBuilder(v)) ?? [];
+      this.options = existing.options;
     }
   }
 
@@ -87,8 +88,8 @@ export class BaseBuilder {
    * @returns The builder instance for chaining.
    */
   addProperty(property: Property, displayName: string): this {
-    this.options.properties ??= new Map();
-    this.options.properties.set(property.serialize(), displayName);
+    this.options.properties ??= [];
+    this.options.properties.push(new PropertyDisplay(property, displayName));
     return this;
   }
 
@@ -132,9 +133,7 @@ export class BaseBuilder {
    */
   build(): BaseConfig {
     this.validate();
-    return new BaseConfig({
-      ...this.options,
-      views: this.viewBuilders.map(v => v.build()),
-    });
+    const views = this.viewBuilders.map(v => v.build());
+    return new BaseConfig(views, this.options);
   }
 }

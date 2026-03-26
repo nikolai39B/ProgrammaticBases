@@ -48,12 +48,14 @@ export class Property {
    * @throws {Error} If the string does not contain a `.` separator.
    */
   static deserialize(raw: string): Property {
+    // Slice the raw string to get the source and name
     const dotIndex = raw.indexOf('.');
     if (dotIndex === -1) {
       throw new Error(`Invalid property string: "${raw}"`);
     }
     const source = raw.slice(0, dotIndex) as Property.Source;
     const name = raw.slice(dotIndex + 1);
+    
     return new Property(name, source);
   }
 

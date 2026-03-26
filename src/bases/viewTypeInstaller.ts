@@ -1,6 +1,9 @@
+import { deserialize } from "v8";
 import { ViewConfig } from "./viewConfig";
 import { ViewConfigBuilder } from "./viewConfigBuilder";
-import { ViewRegistry, ViewType, ViewTypeRegistry } from "./viewType";
+import { ViewRegistry } from "./viewRegistry";
+import { ViewType, ViewTypeRegistry } from "./viewType";
+import { ViewConfigOptions } from "./viewConfigOptions";
 
 // ─── View Type Installer ─────────────────────────────────────────────────────
 
@@ -101,6 +104,14 @@ export abstract class ViewTypeInstallerBase<K extends ViewType, C extends ViewCo
   abstract createBuilder(config: C): ViewConfigBuilder;
 
   /**
+   * Deserializes a plain object into a {@link ViewConfig} instance.
+   *
+   * @param raw - The raw object to deserialize, typically parsed from YAML.
+   * @returns A {@link ViewConfig} object with all fields populated.
+   */
+  abstract deserialize(raw: Record<string, unknown>): ViewConfig
+
+  /**
    * Registers this view type with the given registry.
    *
    * Constructs a registration entry from {@link type} and {@link createBuilder}
@@ -115,7 +126,8 @@ export abstract class ViewTypeInstallerBase<K extends ViewType, C extends ViewCo
   install(viewRegistry: ViewRegistry): void {
     const registration = {
       type: this.type,
-      createBuilder: (config: C) => this.createBuilder(config)
+      createBuilder: (config: C) => this.createBuilder(config),
+      deserialize: (raw: Record<string, unknown>) => this.deserialize(raw)
     };
 
     viewRegistry.register(registration);

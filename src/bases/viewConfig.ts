@@ -97,24 +97,68 @@ export abstract class ViewConfig {
    * @returns A plain object representing this view configuration.
    */
   serialize(): Record<string, unknown> {
-    const result: Record<string, unknown> = {
+    // Serialize the name and type
+    const obj: Record<string, unknown> = {
       type: this.type,
       name: this.name,
     };
 
+    // Serialize attributes
     if (this.filters) {
-      result.filters = this.filters.serialize();
+      obj.filters = this.filters.serialize();
     }
     if (this.groupBy) {
-      result.groupBy = this.groupBy.serialize();
+      obj.groupBy = this.groupBy.serialize();
     }
     if (this.sort) {
-      result.sort = this.sort.map(s => s.serialize());
+      obj.sort = this.sort.map(s => s.serialize());
     }
     if (this.propertyOrder) {
-      result.propertyOrder = this.propertyOrder.map(p => p.serialize());
+      obj.order = this.propertyOrder.map(p => p.serialize());
     }
 
-    return result;
+    return obj;
+  }
+  
+  /**
+   * Deserializes a plain object into a {@link ViewConfigOptions} instance.
+   *
+   * Parses the shared base fields common to all view types:
+   * - `name` — the display name of the view.
+   * - `filters` — an optional filter group scoped to this view.
+   * - `groupBy` — an optional property by which items are grouped.
+   * - `sort` — an optional list of sort rules, in order.
+   * - `propertyOrder` — an optional ordered list of property display fields.
+   *
+   * Subclasses should call `super.deserialize(raw)` to obtain the base
+   * {@link ViewConfigOptions}, then extend it with their own fields.
+   *
+   * @param raw - The raw object to deserialize, typically parsed from YAML.
+   * @returns A {@link ViewConfigOptions} object with all base fields populated.
+   */
+  static deserialize(raw: Record<string, unknown>): ViewConfigOptions {
+    const filters = raw.filters
+      ? FilterGroup.deserialize(raw.filters as Record<string, unknown>)
+      : undefined;
+  
+    const groupBy = raw.groupBy
+      ? PropertyOrder.deserialize(raw.groupBy as Record<string, unknown>)
+      : undefined;
+  
+    const sort = raw.sort
+      ? (raw.sort as Record<string, unknown>[]).map(PropertyOrder.deserialize)
+      : undefined;
+  
+    const propertyOrder = raw.order
+      ? (raw.order as string[]).map(Property.deserialize)
+      : undefined;
+  
+    return {
+      name: raw.name as string,
+      filters,
+      groupBy,
+      sort,
+      propertyOrder,
+    };
   }
 }

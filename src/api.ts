@@ -5,7 +5,7 @@ import { TableViewBuilder } from './bases/tableViewBuilder';
 import { ListViewBuilder } from './bases/listViewBuilder';
 import { Property } from './bases/property';
 import ProgrammaticBases from './main';
-import { debugGame, debugTask, promiseTesting } from './debug';
+import { debugGame, debugTask, promiseTesting, testJsYaml, testJsYamlLoad } from './debug';
 
 export class ProgrammaticBasesAPI {
   //-- CLASSES
@@ -27,4 +27,6 @@ export class ProgrammaticBasesAPI {
   debugGame = debugGame;
   debugTask = debugTask;
   promiseTesting = promiseTesting;
+  testJsYaml = testJsYaml;
+  testJsYamlLoad = testJsYamlLoad;
 }

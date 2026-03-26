@@ -43,13 +43,18 @@ export class Formula {
   }
 
   /**
-   * Deserializes a `{ name: content }` record into an array of {@link Formula} instances.
-   * Multiple formulas can be stored in a single record, one per key.
+   * Deserializes a `{ name: content }` record into a {@link Formula} instance.
    *
-   * @param raw - The raw record to deserialize.
-   * @returns An array of deserialized {@link Formula} instances.
+   * @param raw - The serialized formula record, where the key is the formula name
+   *              and the value is the formula content.
+   * @returns The deserialized {@link Formula} instance.
    */
-  static deserialize(raw: Record<string, string>): Formula[] {
-    return Object.entries(raw).map(([name, content]) => new Formula(name, content));
+  static deserialize(raw: Record<string, string>): Formula {
+    const entry = Object.entries(raw)[0];
+    if (!entry) { 
+      throw new Error("Cannot deserialize an empty record.");
+    }
+    const [name, content] = entry;
+    return new Formula(name, content);
   }
 }
