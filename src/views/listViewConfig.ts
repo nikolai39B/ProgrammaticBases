@@ -33,6 +33,17 @@ export class ListViewConfig extends ViewConfig {
     super(options);
   }
 
+  // ── Accessors
+
+  /** An optional flag controlling whether nested properties are indented under their parent item. */
+  get indentProperties(): boolean | undefined { return this.options.indentProperties; }
+
+  /** An optional marker style used to prefix each list item (`'number'`, `'bullet'`, or `'none'`). */
+  get markers(): ListViewConfigOptions.MarkerType | undefined { return this.options.markers; }
+
+  /** An optional string used to separate list items or their properties (e.g. `','` or `' | '`). */
+  get separator(): string | undefined { return this.options.separator; }
+
   // ── Serialization
 
   /**
@@ -46,7 +57,16 @@ export class ListViewConfig extends ViewConfig {
     // Serialize the base class properties
     const obj = super.serialize();
 
-    // TODO add list specific properties
+    // Serialize attributes
+    if (this.indentProperties != null) {
+      obj.indentProperties = this.indentProperties;
+    }
+    if (this.markers) {
+      obj.markers = this.markers;
+    }
+    if (this.separator) {
+      obj.separator = this.separator;
+    }
 
     return obj;
   }
@@ -61,10 +81,11 @@ export class ListViewConfig extends ViewConfig {
     // Deserialize base class properties
     const base = ViewConfig.deserialize(raw);
 
-    // TODO add list specific properties
-
     return new ListViewConfig({
-      ...base
+      ...base,
+      indentProperties: raw.indentProperties as boolean | undefined,
+      markers: raw.markers as ListViewConfigOptions.MarkerType | undefined,
+      separator: raw.separator as string | undefined
     });
   }
 }

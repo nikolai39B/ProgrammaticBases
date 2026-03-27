@@ -86,12 +86,12 @@ export namespace FilterGroup {
    * The logical operator used to combine children within a {@link FilterGroup}.
    * - `'and'` — all children must match
    * - `'or'` — at least one child must match
-   * - `'none'` — no children must match
+   * - `'not'` — no children must match
    */
-  export type Operator = 'and' | 'or' | 'none';
+  export type Operator = 'and' | 'or' | 'not';
 
   /** All valid {@link Operator} values, useful for iteration and validation. */
-  export const operators: Operator[] = ['and', 'or', 'none'];
+  export const operators: Operator[] = ['and', 'or', 'not'];
 }
 
 // ─── Filter ──────────────────────────────────────────────────────────────────

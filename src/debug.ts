@@ -1,4 +1,6 @@
+import * as fs from 'fs';
 import * as yaml from 'js-yaml';
+import * as path from 'path';
 import ProgrammaticBases from 'main';
 import { BaseConfig } from 'bases/baseConfig';
 import { BaseBuilder } from 'bases/baseConfigBuilder';
@@ -97,7 +99,7 @@ export default class DebugUtils {
   static async testJsYamlLoad() {
     
     const filePath = path.resolve(__dirname, 'fixtures/exampleBase.yaml');
-    const yamlString = await ProgrammaticBases.instance.app.vault.adapter.read(path);
+    const yamlString = fs.readFileSync(filePath, 'utf-8');
     const yamlObj1 = yaml.load(yamlString);
     const baseConfig = BaseConfig.deserialize(yamlObj1 as Record<string, unknown>, 
       ProgrammaticBases.instance.viewRegistry

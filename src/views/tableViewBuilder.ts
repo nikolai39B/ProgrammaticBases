@@ -13,7 +13,7 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
   // ── Attributes
 
   /** Narrows the inherited {@link BaseViewBuilder.options} to {@link TableViewConfigOptions}. */
-  protected declare options: Partial<TableViewConfigOptions>;
+  protected declare options: TableViewConfigOptions;
 
   // ── Constructor
 

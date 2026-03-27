@@ -14,7 +14,7 @@ export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
   // ── Attributes
 
   /** Narrows the inherited {@link BaseViewBuilder.options} to {@link CardViewConfigOptions}. */
-  protected declare options: Partial<CardViewConfigOptions>;
+  protected declare options: CardViewConfigOptions;
 
   // ── Constructor
 
