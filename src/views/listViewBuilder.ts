@@ -9,12 +9,12 @@ import { BaseViewBuilder } from './viewConfigBuilder';
  * Extends {@link BaseViewBuilder} with additional mutators for list-specific
  * options such as indentation, marker style, and item separation.
  */
-export class ListViewBuilder extends BaseViewBuilder<ListViewConfigOptions> {
+export class ListViewBuilder extends BaseViewBuilder<ListViewConfig> {
 
   // ── Attributes
 
-  /** Narrows the inherited {@link BaseViewBuilder.options} to {@link CardViewConfigOptions}. */
-  protected declare options: ListViewConfigOptions;
+  /** Widens the inherited {@link BaseViewBuilder["options"]} to {@link ListViewConfigOptions}. */
+  protected declare options: Partial<ListViewConfigOptions>;
 
   // ── Constructor
 
@@ -23,7 +23,7 @@ export class ListViewBuilder extends BaseViewBuilder<ListViewConfigOptions> {
    *
    * @param existing - Optional existing list view configuration to initialize from.
    */
-  constructor(existing?: ListViewConfigOptions) {
+  constructor(existing?: ListViewConfig) {
     super(existing);
   }
 

@@ -1,27 +1,35 @@
 // viewType.ts
 
+import { CardViewConfig } from "./cardViewConfig";
+import { ListViewConfig } from "./listViewConfig";
+import { TableViewConfig } from "./tableViewConfig";
+
 // ─── View Type ───────────────────────────────────────────────────────────────
 
 /**
  * Registry of all known view types in the application.
  *
- * To add a new view type, extend this interface with a new key. The value
- * should always be `true` — it exists only to satisfy the mapped type and
- * carries no runtime meaning.
+ * Each key is a unique view type identifier and its value is the corresponding
+ * {@link ViewConfig} type for that view. This mapping is used throughout the
+ * type system to infer the correct configuration type from a given view type
+ * key, without requiring explicit type parameters at call sites.
+ *
+ * To add a new view type, extend this interface via declaration merging and
+ * provide the corresponding configuration type as the value.
  *
  * @example
  * ```typescript
  * declare module "./viewType" {
- *   interface ViewTypeRegistry {
- *     gantt: true;
+ *   interface ViewTypeRegistry {  
+ *     gantt: GanttViewConfig;
  *   }
  * }
  * ```
  */
 export interface ViewTypeRegistry {
-  'cards': true;
-  'table': true;
-  'list':  true;
+  'cards': CardViewConfig;
+  'table': TableViewConfig;
+  'list':  ListViewConfig;
 }
 
 /**

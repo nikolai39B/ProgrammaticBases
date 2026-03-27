@@ -1,6 +1,6 @@
-import { FilterGroup } from './filter';
-import { Property } from './property';
-import { PropertyOrder } from './propertyOrder';
+import { FilterGroup } from 'primitives/filter';
+import { Property } from 'primitives/property';
+import { PropertyOrder } from 'primitives/propertyOrder';
 
 // ─── Base ─────────────────────────────────────────────────────────────────────
 

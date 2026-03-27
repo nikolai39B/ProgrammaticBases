@@ -1,6 +1,7 @@
 import { TableViewConfigOptions } from './tableViewConfigOptions';
 import { ViewType } from './viewType';
 import { ViewConfig } from './viewConfig';
+import { SerializationUtils } from 'utils/serializationUtils';
 
 // ─── Table View ───────────────────────────────────────────────────────────────
 
@@ -78,14 +79,17 @@ export class TableViewConfig extends ViewConfig {
     const base = ViewConfig.deserialize(raw);
   
     // Deserialize attributes
+    const rowHeight = raw.rowHeight ?
+      SerializationUtils.deserializeTypedString<TableViewConfigOptions.RowHeightType>(raw.rowHeight, TableViewConfigOptions.rowHeightTypes) :
+      undefined;
     const columnSize = raw.columnSize
       ? new Map(Object.entries(raw.columnSize as Record<string, number>))
       : undefined;
   
     return new TableViewConfig({
       ...base,
-      rowHeight: raw.rowHeight as TableViewConfigOptions.RowHeightType | undefined,
-      columnSize,
+      rowHeight: rowHeight,
+      columnSize: columnSize
     });
   }
 }

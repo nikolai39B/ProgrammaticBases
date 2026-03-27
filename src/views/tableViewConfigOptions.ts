@@ -26,4 +26,7 @@ export namespace TableViewConfigOptions {
    * - `'extra-tall'` — maximum row height
    */
   export type RowHeightType = 'short' | 'medium' | 'tall' | 'extra-tall';
+
+  /** All valid {@link RowHeightType} values, useful for iteration and validation. */
+  export const rowHeightTypes: RowHeightType[] = ['short', 'medium', 'tall', 'extra-tall'];
 }

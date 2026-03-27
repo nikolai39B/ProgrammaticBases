@@ -9,12 +9,12 @@ import { BaseViewBuilder } from './viewConfigBuilder';
  * Builder for {@link CardViewConfig} instances.
  * Extends {@link BaseViewBuilder} with card-specific setter methods.
  */
-export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
+export class CardViewBuilder extends BaseViewBuilder<CardViewConfig> {
 
   // ── Attributes
 
-  /** Narrows the inherited {@link BaseViewBuilder.options} to {@link CardViewConfigOptions}. */
-  protected declare options: CardViewConfigOptions;
+  /** Widens the inherited {@link BaseViewBuilder.options} to {@link CardViewConfigOptions}. */
+  protected declare options: Partial<CardViewConfigOptions>;
 
   // ── Constructor
 
@@ -23,7 +23,7 @@ export class CardViewBuilder extends BaseViewBuilder<CardViewConfigOptions> {
    *
    * @param existing - Optional existing card view configuration to initialize from.
    */
-  constructor(existing?: CardViewConfigOptions) {
+  constructor(existing?: CardViewConfig) {
     super(existing);
   }
 

@@ -1,5 +1,6 @@
 // propertyOrder.ts
 
+import { SerializationUtils } from "utils/serializationUtils";
 import { Property } from "./property";
 
 // ─── Property Order ──────────────────────────────────────────────────────────
@@ -55,10 +56,7 @@ export class PropertyOrder {
    */
   static deserialize(raw: Record<string, unknown>): PropertyOrder {
     const property = Property.deserialize(raw.property as string);
-    const direction = raw.direction as PropertyOrder.Direction;
-    if (direction !== 'ASC' && direction !== 'DESC') {
-      throw new Error(`Invalid direction: "${direction}"`);
-    }
+    const direction = SerializationUtils.deserializeTypedString<PropertyOrder.Direction>(raw.direction, PropertyOrder.directions);
     return new PropertyOrder(property, direction);
   }
 }
@@ -70,4 +68,7 @@ export namespace PropertyOrder {
    * - `'DESC'` — descending order
    */
   export type Direction = 'ASC' | 'DESC';
+
+  /** All valid {@link Direction} values, useful for iteration and validation. */
+  export const directions: Direction[] = ['ASC', 'DESC'];
 }

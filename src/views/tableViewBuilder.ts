@@ -8,12 +8,12 @@ import { BaseViewBuilder } from './viewConfigBuilder';
  * Builder for {@link TableViewConfig} instances.
  * Extends {@link BaseViewBuilder} with table-specific setter methods.
  */
-export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
+export class TableViewBuilder extends BaseViewBuilder<TableViewConfig> {
 
   // ── Attributes
 
-  /** Narrows the inherited {@link BaseViewBuilder.options} to {@link TableViewConfigOptions}. */
-  protected declare options: TableViewConfigOptions;
+  /** Widens the inherited {@link BaseViewBuilder.options} to {@link TableViewConfigOptions}. */
+  protected declare options: Partial<TableViewConfigOptions>;
 
   // ── Constructor
 
@@ -22,7 +22,7 @@ export class TableViewBuilder extends BaseViewBuilder<TableViewConfigOptions> {
    *
    * @param existing - Optional existing table view configuration to initialize from.
    */
-  constructor(existing?: TableViewConfigOptions) {
+  constructor(existing?: TableViewConfig) {
     super(existing);
   }
 

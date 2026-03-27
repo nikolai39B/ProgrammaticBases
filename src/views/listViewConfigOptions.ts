@@ -40,4 +40,7 @@ export namespace ListViewConfigOptions {
    * - `'none'`   — items have no prefix marker
    */
   export type MarkerType = 'number' | 'bullet' | 'none';
+
+  /** All valid {@link MarkerType} values, useful for iteration and validation. */
+  export const markerTypes: MarkerType[] = ['number', 'bullet', 'none'];
 }

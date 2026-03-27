@@ -1,6 +1,7 @@
 import { ListViewConfigOptions } from './listViewConfigOptions';
 import { ViewType } from './viewType';
 import { ViewConfig } from './viewConfig';
+import { SerializationUtils } from 'utils/serializationUtils';
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ export class ListViewConfig extends ViewConfig {
     if (this.markers) {
       obj.markers = this.markers;
     }
-    if (this.separator) {
+    if (this.separator != null) {
       obj.separator = this.separator;
     }
 
@@ -81,10 +82,15 @@ export class ListViewConfig extends ViewConfig {
     // Deserialize base class properties
     const base = ViewConfig.deserialize(raw);
 
+    // Deserialize attributes
+    const markers = raw.markers ?
+      SerializationUtils.deserializeTypedString<ListViewConfigOptions.MarkerType>(raw.markers, ListViewConfigOptions.markerTypes) :
+      undefined;
+
     return new ListViewConfig({
       ...base,
       indentProperties: raw.indentProperties as boolean | undefined,
-      markers: raw.markers as ListViewConfigOptions.MarkerType | undefined,
+      markers: markers,
       separator: raw.separator as string | undefined
     });
   }

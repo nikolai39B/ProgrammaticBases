@@ -49,4 +49,38 @@ export class SerializationUtils {
       deserialize({ [name]: value })
     );
   }
+
+  /**
+   * Validates and narrows a raw unknown value to a known union string type `T`.
+   *
+   * Intended for use during deserialization where a raw value must be a string
+   * belonging to a fixed set of valid string literals (e.g. `'number' | 'bullet' | 'none'`).
+   *
+   * @template T - A string literal union type representing the valid values.
+   *
+   * @param raw - The raw unknown value to validate.
+   * @param validValues - An array of all accepted values for `T`.
+   * @returns The validated value narrowed to type `T`.
+   *
+   * @throws {Error} If `raw` is not a string, or is not present in `validValues`.
+   *
+   * @example
+   * type MarkerType = 'number' | 'bullet' | 'none';
+   * const valid: MarkerType[] = ['number', 'bullet', 'none'];
+   *
+   * deserializeTypedString('bullet', valid);  // ✔ returns 'bullet'
+   * deserializeTypedString('invalid', valid); // ✖ throws Error
+   * deserializeTypedString(42, valid);        // ✖ throws Error
+   */
+  static deserializeTypedString<T>(
+    raw: unknown,
+    validValues: T[]
+  ): T {
+    if (typeof raw !== 'string' || !validValues.includes(raw as T)) {
+      throw new Error(
+        `Invalid string: expected one of ${validValues.map(v => `'${v}'`).join(', ')}, got '${raw}'.`
+      );
+    }
+    return raw as T;
+  }
 }

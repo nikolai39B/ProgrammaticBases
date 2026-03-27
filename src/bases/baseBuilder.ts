@@ -8,6 +8,7 @@ import { Formula } from 'primitives/formula';
 import { Property } from 'primitives/property';
 import { ViewConfigBuilder } from 'views/viewConfigBuilder';
 import { PropertyDisplay } from 'primitives/propertyDisplay';
+import { ViewRegistry } from 'views/viewRegistry';
 
 // ─── Base View Builder ───────────────────────────────────────────────────────
 
@@ -42,11 +43,15 @@ export class BaseBuilder {
    * via the visitor pattern, enabling further modification before rebuilding.
    *
    * @param existing - Optional existing configuration to initialize from.
+   * @param registry - Registry used to reconstruct view builders from the existing
+   *                   configuration. Required when an existing config is provided.
    */
-  constructor(existing?: BaseConfig) {
+  constructor();
+  constructor(existing: BaseConfig, registry: ViewRegistry);
+  constructor(existing?: BaseConfig, registry?: ViewRegistry) {
     if (existing) {
       this.viewBuilders = existing.views?.map(
-        v => ProgrammaticBases.instance.viewRegistry.createBuilder(v)) ?? [];
+        v => registry!.createBuilder(v)) ?? [];
       this.options = existing.options;
     }
   }

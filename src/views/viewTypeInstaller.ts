@@ -1,9 +1,7 @@
-import { deserialize } from "v8";
 import { ViewConfig } from "./viewConfig";
 import { ViewConfigBuilder } from "./viewConfigBuilder";
 import { ViewRegistry } from "./viewRegistry";
 import { ViewType, ViewTypeRegistry } from "./viewType";
-import { ViewConfigOptions } from "./viewConfigOptions";
 
 // ─── View Type Installer ─────────────────────────────────────────────────────
 
@@ -53,10 +51,14 @@ export interface ViewTypeInstaller {
 /**
  * Base class for registering a view type with the application.
  *
- * Implementors must provide a unique {@link type} and a {@link createBuilder}
- * factory. The {@link install} and {@link uninstall} lifecycle methods are
- * implemented here and should not need to be overridden — customise
- * {@link createBuilder} instead.
+ * Implementors must provide a unique {@link type} and implement
+ * {@link createBuilder} and {@link deserialize}. The correct configuration
+ * type for both methods is inferred automatically from {@link ViewTypeRegistry}
+ * via the `K` type parameter — no second type parameter is needed.
+ *
+ * The {@link install} and {@link uninstall} lifecycle methods are implemented
+ * here and should not need to be overridden — customise {@link createBuilder}
+ * and {@link deserialize} instead.
  *
  * Instances should be stored and managed through the {@link ViewTypeInstaller}
  * interface to avoid exposing the generic type parameters to call sites that
@@ -67,23 +69,38 @@ export interface ViewTypeInstaller {
  * specific registry instance.
  *
  * @typeParam K - The unique view type key, constrained to {@link ViewType}.
- * @typeParam C - The view configuration type, constrained to {@link ViewConfig}.
+ *   The configuration type is resolved automatically as
+ *   `ViewTypeRegistry[K]` — extend {@link ViewTypeRegistry} via declaration
+ *   merging to register new view types.
  *
  * @example
  * ```typescript
- * class GanttViewInstaller extends ViewTypeInstallerBase<'gantt', GanttViewConfig> {
+ * // 1. Extend the registry in your plugin
+ * declare module "./viewType" {
+ *   interface ViewTypeRegistry {
+ *     gantt: GanttViewConfig;
+ *   }
+ * }
+ *
+ * // 2. Implement the installer — config type is inferred from the registry
+ * class GanttViewInstaller extends ViewTypeInstallerBase<'gantt'> {
  *   readonly type = 'gantt' as const;
  *
  *   createBuilder(config: GanttViewConfig): GanttViewBuilder {
  *     return new GanttViewBuilder(config);
  *   }
+ *
+ *   deserialize(raw: Record<string, unknown>): GanttViewConfig {
+ *     return GanttViewConfig.fromRaw(raw);
+ *   }
  * }
  *
+ * // 3. Install during plugin initialisation
  * const installer = new GanttViewInstaller();
  * installer.install(viewRegistry);
  * ```
  */
-export abstract class ViewTypeInstallerBase<K extends ViewType, C extends ViewConfig>
+export abstract class ViewTypeInstallerBase<K extends ViewType>
   implements ViewTypeInstaller {
 
   /**
@@ -98,35 +115,42 @@ export abstract class ViewTypeInstallerBase<K extends ViewType, C extends ViewCo
    * Called by the builder factory each time a new view instance is created.
    * Implementations should return a fresh builder instance on every call.
    *
+   * The type of `config` is inferred from {@link ViewTypeRegistry} based on
+   * the `K` type parameter — no explicit annotation is needed in subclasses.
+   *
    * @param config - The configuration for the view being built.
    * @returns A new builder instance initialised with the given config.
    */
-  abstract createBuilder(config: C): ViewConfigBuilder;
+  abstract createBuilder(config: ViewTypeRegistry[K]): ViewConfigBuilder;
 
   /**
-   * Deserializes a plain object into a {@link ViewConfig} instance.
+   * Deserializes a plain object into the configuration type for this view.
+   *
+   * The return type is inferred from {@link ViewTypeRegistry} based on the
+   * `K` type parameter, ensuring the deserialized value is always the correct
+   * config type for this installer.
    *
    * @param raw - The raw object to deserialize, typically parsed from YAML.
-   * @returns A {@link ViewConfig} object with all fields populated.
+   * @returns A config object of type `ViewTypeRegistry[K]` with all fields populated.
    */
-  abstract deserialize(raw: Record<string, unknown>): ViewConfig
+  abstract deserialize(raw: Record<string, unknown>): ViewTypeRegistry[K];
 
   /**
    * Registers this view type with the given registry.
    *
-   * Constructs a registration entry from {@link type} and {@link createBuilder}
-   * and passes it to the registry. Call this once during application or plugin
-   * initialisation.
+   * Constructs a registration entry from {@link type}, {@link createBuilder},
+   * and {@link deserialize}, then passes it to the registry. Call this once
+   * during application or plugin initialisation.
    *
    * Subclasses should not need to override this method — customise
-   * {@link createBuilder} instead.
+   * {@link createBuilder} and {@link deserialize} instead.
    *
    * @param viewRegistry - The registry to register this view type with.
    */
   install(viewRegistry: ViewRegistry): void {
     const registration = {
       type: this.type,
-      createBuilder: (config: C) => this.createBuilder(config),
+      createBuilder: (config: ViewTypeRegistry[K]) => this.createBuilder(config),
       deserialize: (raw: Record<string, unknown>) => this.deserialize(raw)
     };
 

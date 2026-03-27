@@ -49,6 +49,9 @@ views:
       - file.backlinks
       - file.basename
       - file.embeds
-    markers: number
+    sort:
+      - property: _formatted_effort
+        direction: ASC
     indentProperties: false
     separator: "|"
+    markers: none

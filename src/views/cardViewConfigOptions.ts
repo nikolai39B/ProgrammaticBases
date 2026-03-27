@@ -28,4 +28,7 @@ export namespace CardViewConfigOptions {
    * - `'cover'` — the image is scaled to fill the card, cropping if necessary
    */
   export type ImageFitType = 'contain' | 'cover';
+
+  /** All valid {@link ImageFitType} values, useful for iteration and validation. */
+  export const imageFitTypes: ImageFitType[] = ['contain', 'cover'];
 }

@@ -7,11 +7,12 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      'obsidian': path.resolve(__dirname, '__mocks__/obsidian.ts'),
       'bases': path.resolve(__dirname, 'src/bases'),
       'fileManagement': path.resolve(__dirname, 'src/fileManagement'),
       'primitives': path.resolve(__dirname, 'src/primitives'),
       'utils': path.resolve(__dirname, 'src/utils'),
-      'views': path.resolve(__dirname, 'src/views')
+      'views': path.resolve(__dirname, 'src/views'),
     }
   }
 });

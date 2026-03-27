@@ -2,6 +2,7 @@ import { Property } from 'primitives/property';
 import { CardViewConfigOptions } from './cardViewConfigOptions';
 import { ViewType } from './viewType';
 import { ViewConfig } from './viewConfig';
+import { SerializationUtils } from 'utils/serializationUtils';
 
 // ─── Card View ────────────────────────────────────────────────────────────────
 
@@ -89,15 +90,18 @@ export class CardViewConfig extends ViewConfig {
     const base = ViewConfig.deserialize(raw);
 
     // Deserialize attributes
-    const image = raw.image
-      ? Property.deserialize(raw.image as string)
-      : undefined;
+    const image = raw.image ? 
+      Property.deserialize(raw.image as string) : 
+      undefined;
+    const imageFit = raw.imageFit ?
+      SerializationUtils.deserializeTypedString<CardViewConfigOptions.ImageFitType>(raw.imageFit, CardViewConfigOptions.imageFitTypes) :
+      undefined;
 
     return new CardViewConfig({
       ...base,
       cardSize: raw.cardSize as number | undefined,
       image: image,
-      imageFit: raw.imageFit as CardViewConfigOptions.ImageFitType | undefined,
+      imageFit: imageFit,
       imageAspectRatio: raw.imageAspectRatio as number | undefined,
     });
   }

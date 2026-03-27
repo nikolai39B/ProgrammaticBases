@@ -1,7 +1,7 @@
 // api.ts
 import DebugUtils from 'debug';
 import ProgrammaticBases from 'main';
-import { BaseBuilder } from 'bases/baseConfigBuilder';
+import { BaseBuilder } from 'bases/baseBuilder';
 import { Property } from 'primitives/property';
 import { CardViewBuilder } from 'views/cardViewBuilder';
 import { TableViewBuilder } from 'views/tableViewBuilder';
