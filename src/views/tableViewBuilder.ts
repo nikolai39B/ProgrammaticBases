@@ -1,4 +1,4 @@
-import { TableViewConfigOptions } from '../bases/tableViewConfigOptions';
+import { TableViewConfigOptions } from 'views/tableViewConfigOptions';
 import { TableViewConfig } from './tableViewConfig';
 import { BaseViewBuilder } from './viewConfigBuilder';
 

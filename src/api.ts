@@ -1,11 +1,11 @@
 // api.ts
-import { BaseBuilder } from './bases/baseConfigBuilder';
-import { CardViewBuilder } from './bases/cardViewBuilder';
-import { TableViewBuilder } from './bases/tableViewBuilder';
-import { ListViewBuilder } from './bases/listViewBuilder';
-import { Property } from './bases/property';
-import ProgrammaticBases from './main';
-import { debugGame, debugTask, promiseTesting, testJsYaml, testJsYamlLoad } from './debug';
+import DebugUtils from 'debug';
+import ProgrammaticBases from 'main';
+import { BaseBuilder } from 'bases/baseConfigBuilder';
+import { Property } from 'primitives/property';
+import { CardViewBuilder } from 'views/cardViewBuilder';
+import { TableViewBuilder } from 'views/tableViewBuilder';
+import { ListViewBuilder } from 'views/listViewBuilder';
 
 export class ProgrammaticBasesAPI {
   //-- CLASSES
@@ -24,9 +24,10 @@ export class ProgrammaticBasesAPI {
   }
 
   //-- DEBUG
-  debugGame = debugGame;
-  debugTask = debugTask;
-  promiseTesting = promiseTesting;
-  testJsYaml = testJsYaml;
-  testJsYamlLoad = testJsYamlLoad;
+  debug = DebugUtils;
+  //debugGame = DebugUtils.debugGame;
+  //debugTask = DebugUtils.debugTask;
+  //promiseTesting = DebugUtils.promiseTesting;
+  //testJsYaml = DebugUtils.testJsYaml;
+  //testJsYamlLoad = DebugUtils.testJsYamlLoad;
 }

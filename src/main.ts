@@ -3,11 +3,11 @@ import { Plugin, View } from 'obsidian';
 import { ProgrammaticBasesAPI } from 'api';
 import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
 
-import { CardViewInstaller } from 'bases/cardViewInstaller';
-import { ListViewInstaller } from 'bases/listViewInstaller';
-import { TableViewInstaller } from 'bases/tableViewInstaller';
-import { ViewTypeInstaller } from 'bases/viewTypeInstaller';
-import { ViewRegistry } from 'bases/viewRegistry';
+import { CardViewInstaller } from 'views/cardViewInstaller';
+import { ListViewInstaller } from 'views/listViewInstaller';
+import { TableViewInstaller } from 'views/tableViewInstaller';
+import { ViewTypeInstaller } from 'views/viewTypeInstaller';
+import { ViewRegistry } from 'views/viewRegistry';
 
 import { BaseFileManager } from 'fileManagement/baseFileManager';
 

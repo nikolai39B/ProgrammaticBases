@@ -1,0 +1,54 @@
+filters:
+  and:
+    - file.hasTag("dc2412", "dc2512")
+    - not:
+        - file.hasLink("Bases/testBase.base")
+        - file.folder.contains("hello")
+formulas:
+  file name: this.file.path.split('a')
+properties:
+  file.basename:
+    displayName: test display
+views:
+  - type: table
+    name: My Table
+    filters:
+      and:
+        - file.hasTag("digital_thread")
+        - or:
+            - file.hasTag("dc2412")
+            - and:
+                - file.hasTag("dc2512")
+                - file.inFolder("Task List/Project/DC2612/Digital Thread/Issues")
+        - or:
+            - file.hasTag("dc2606")
+    groupBy:
+      property: file.folder
+      direction: ASC
+    order:
+      - file.name
+      - file.backlinks
+      - file.basename
+      - formula.file name
+    sort:
+      - property: file.basename
+        direction: ASC
+      - property: file.tags
+        direction: DESC
+    rowHeight: tall
+  - type: cards
+    name: My Cards
+    cardSize: 330
+    image: note.external_ids
+    imageFit: contain
+    imageAspectRatio: 0.6
+  - type: list
+    name: My List
+    order:
+      - file.name
+      - file.backlinks
+      - file.basename
+      - file.embeds
+    markers: number
+    indentProperties: false
+    separator: "|"

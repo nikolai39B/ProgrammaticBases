@@ -1,4 +1,4 @@
-import { ListViewConfigOptions } from '../bases/listViewConfigOptions';
+import { ListViewConfigOptions } from 'views/listViewConfigOptions';
 import { ListViewConfig } from './listViewConfig';
 import { BaseViewBuilder } from './viewConfigBuilder';
 

@@ -1,13 +1,13 @@
 // baseConfig.ts
 
-import ProgrammaticBases from 'main';
 import { BaseConfigOptions } from './baseConfigOptions';
-import { FilterGroup } from './filter';
-import { Formula } from './formula';
-import { PropertyDisplay } from './propertyDisplay';
-import { ViewConfig } from './viewConfig';
+import { FilterGroup } from 'primitives/filter';
+import { Formula } from 'primitives/formula';
+import { PropertyDisplay } from 'primitives/propertyDisplay';
+import { ViewConfig } from 'views/viewConfig';
 import * as yaml from 'js-yaml';
 import { SerializationUtils } from 'utils/serializationUtils';
+import { ViewRegistry } from 'views/viewRegistry';
 
 /**
  * Represents the top-level configuration for a database or collection,
@@ -89,12 +89,13 @@ export class BaseConfig {
    *   - `filters` — a serialized filter group, if present.
    *   - `formulas` — an array of serialized formula objects, if present.
    *   - `properties` — an array of serialized property display objects, if present.
+   * @param viewRegistry - The registry used to deserialize each view object
+   *   into its corresponding view instance.
    *
    * @returns The deserialized {@link BaseConfig} instance.
    */
-  static deserialize(raw: Record<string, unknown>): BaseConfig {
-    const views = (raw.views as Record<string, unknown>[]).map(v =>
-      ProgrammaticBases.instance.viewRegistry.deserialize(v));
+  static deserialize(raw: Record<string, unknown>, viewRegistry: ViewRegistry): BaseConfig {
+    const views = (raw.views as Record<string, unknown>[]).map(v => viewRegistry.deserialize(v));
   
     const filters = raw.filters ?
       FilterGroup.deserialize(raw.filters as Record<string, unknown>) :

@@ -1,4 +1,4 @@
-import { Property } from './property';
+import { Property } from 'primitives/property';
 import { CardViewConfigOptions } from './cardViewConfigOptions';
 import { ViewType } from './viewType';
 import { ViewConfig } from './viewConfig';

@@ -1,4 +1,4 @@
-import { Property } from './property';
+import { Property } from 'primitives/property';
 import { ViewConfigOptions } from './viewConfigOptions';
 
 // ─── Card ─────────────────────────────────────────────────────────────────────

@@ -3,11 +3,11 @@
 import ProgrammaticBases from 'main';
 import { BaseConfig } from './baseConfig';
 import { BaseConfigOptions } from './baseConfigOptions';
-import { FilterGroup } from './filter'
-import { Formula } from './formula';
-import { Property } from './property';
-import { ViewConfigBuilder } from './viewConfigBuilder';
-import { PropertyDisplay } from './propertyDisplay';
+import { FilterGroup } from 'primitives/filter'
+import { Formula } from 'primitives/formula';
+import { Property } from 'primitives/property';
+import { ViewConfigBuilder } from 'views/viewConfigBuilder';
+import { PropertyDisplay } from 'primitives/propertyDisplay';
 
 // ─── Base View Builder ───────────────────────────────────────────────────────
 

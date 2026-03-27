@@ -1,18 +1,14 @@
 // baseConfigOptions.ts
 
-import { FilterGroup } from './filter';
-import { Formula } from './formula';
-import { PropertyDisplay } from './propertyDisplay';
-//import { ViewConfigOptions } from './viewConfigOptions';
+import { FilterGroup } from 'primitives/filter';
+import { Formula } from 'primitives/formula';
+import { PropertyDisplay } from 'primitives/propertyDisplay';
 
 /**
  * Options for constructing a {@link BaseConfig} instance.
  * Encapsulates all top-level configuration fields for a database or collection.
  */
 export interface BaseConfigOptions {
-  /** The list of views defined within this configuration. Must not be empty. */
-  //views: ViewConfigOptions[];
-
   /** An optional top-level filter group applied across the entire configuration. */
   filters?: FilterGroup;
 
