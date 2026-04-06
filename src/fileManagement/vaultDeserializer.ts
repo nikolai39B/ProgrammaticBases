@@ -1,12 +1,17 @@
 import * as yaml from 'js-yaml';
-import { App } from 'obsidian';
+import { App, normalizePath } from 'obsidian';
+import { ComponentsFolder } from 'settings';
 
 /**
  * Deserializes YAML files from the Obsidian vault, resolving !sub tags
  * by recursively loading and substituting referenced files.
+ *
+ * !sub references are resolved against the provided componentsFolders in
+ * priority order (first match wins). A qualifier prefix can be used to
+ * target a specific folder explicitly: `!sub task-base:filter/focused.yaml`.
  */
 export class VaultDeserializer {
-  constructor(private app: App) {}
+  constructor(private app: App, private componentsFolders: ComponentsFolder[] = []) {}
 
   /**
    * Deserializes a YAML file at the given vault path.
@@ -14,7 +19,7 @@ export class VaultDeserializer {
    * @returns the deserialized object with all !sub tags resolved
    */
   deserialize(path: string): Promise<unknown> {
-    return deserialize(path, this.app, new Set());
+    return deserialize(path, this.app, new Set(), this.componentsFolders);
   }
 }
 
@@ -24,8 +29,9 @@ export class VaultDeserializer {
  * @param path - vault-relative path to the YAML file
  * @param app - Obsidian app instance
  * @param visited - set of already-visited paths for circular reference detection
+ * @param componentsFolders - named folders used to resolve !sub references
  */
-async function deserialize(path: string, app: App, visited: Set<string>): Promise<unknown> {
+async function deserialize(path: string, app: App, visited: Set<string>, componentsFolders: ComponentsFolder[]): Promise<unknown> {
   // Check for circular dependencies
   if (visited.has(path)) {
     throw new Error(`Circular !sub reference detected: ${path}`);
@@ -39,9 +45,57 @@ async function deserialize(path: string, app: App, visited: Set<string>): Promis
 
   // Read the file
   const content = await app.vault.read(file);
-  const schema = buildSchema(app, new Set([...visited, path]));
+  const schema = buildSchema(app, new Set([...visited, path]), componentsFolders);
   const raw = yaml.load(content, { schema });
   return resolvePromises(raw);
+}
+
+/**
+ * Resolves a !sub reference to a vault-relative path using componentsFolders.
+ *
+ * Qualified references (e.g. "task-base:filter/focused.yaml") are resolved
+ * against the named folder only, and throw if the name is not registered.
+ * Unqualified references (e.g. "filter/focused.yaml") are searched across
+ * all folders in priority order — first match wins.
+ *
+ * @param ref - the raw !sub reference string
+ * @param folders - named component folders to search
+ * @param app - Obsidian app instance (used for existence checks on unqualified refs)
+ * @returns vault-relative path to the referenced file
+ */
+function resolveComponentPath(ref: string, folders: ComponentsFolder[], app: App): string {
+  const colonIdx = ref.indexOf(':');
+
+  if (colonIdx !== -1) {
+    // Qualified reference — target a specific named folder
+    const qualifier = ref.substring(0, colonIdx);
+    const relativePath = ref.substring(colonIdx + 1);
+
+    if (relativePath.includes('..')) {
+      throw new Error(`Invalid !sub path: ${ref}`);
+    }
+
+    const folder = folders.find(f => f.name === qualifier);
+    if (!folder) {
+      throw new Error(`Unknown component folder qualifier "${qualifier}" in !sub: ${ref}`);
+    }
+
+    return normalizePath(`${folder.path}/${relativePath}`);
+  }
+
+  // Unqualified reference — search folders in priority order
+  if (ref.includes('..')) {
+    throw new Error(`Invalid !sub path: ${ref}`);
+  }
+
+  for (const folder of folders) {
+    const candidate = normalizePath(`${folder.path}/${ref}`);
+    if (app.vault.getFileByPath(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`Component not found: "${ref}" (searched ${folders.length} folder(s))`);
 }
 
 /**
@@ -49,8 +103,9 @@ async function deserialize(path: string, app: App, visited: Set<string>): Promis
  * the referenced file and returning a promise for its contents.
  * @param app - Obsidian app instance
  * @param visited - set of already-visited paths, passed through for circular reference detection
+ * @param componentsFolders - named folders used to resolve !sub references
  */
-function buildSchema(app: App, visited: Set<string>): yaml.Schema {
+function buildSchema(app: App, visited: Set<string>, componentsFolders: ComponentsFolder[]): yaml.Schema {
   // Define the 'sub' type which loads components from other files
   const subTag = new yaml.Type('!sub', {
     kind: 'scalar',
@@ -59,14 +114,9 @@ function buildSchema(app: App, visited: Set<string>): yaml.Schema {
     resolve: (data: unknown) => typeof data === 'string',
 
     // Deserialize the target file
-    construct: (path: string) => {
-      // Don't attempt to load paths outside the intended directory
-      if (path.includes('..')) {
-        throw new Error(`Invalid !sub path: ${path}`);
-      }
-
-      // Deserialize the file
-      return deserialize(path, app, visited);
+    construct: (ref: string) => {
+      const resolvedPath = resolveComponentPath(ref, componentsFolders, app);
+      return deserialize(resolvedPath, app, visited, componentsFolders);
     },
   });
 

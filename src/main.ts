@@ -1,7 +1,8 @@
 import { Plugin, View } from 'obsidian';
 
 import { ProgrammaticBasesAPI } from 'api';
-import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
+import { createBaseFromTemplateCommand } from 'commands/createBaseFromTemplate';
+import { ComponentsFolder, DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
 
 import { CardViewInstaller } from 'views/cardViewInstaller';
 import { ListViewInstaller } from 'views/listViewInstaller';
@@ -29,6 +30,17 @@ export default class ProgrammaticBases extends Plugin {
   // Settings
   private _settings: ProgrammaticBasesSettings;
   get settings(): ProgrammaticBasesSettings { return this._settings; }
+
+  /**
+   * All component folders: settings-configured ones first (priority order),
+   * followed by runtime-registered ones from other plugins.
+   */
+  get allComponentsFolders(): ComponentsFolder[] {
+    return [
+      ...this._settings.componentsFolders,
+      ...window.programmaticBases.registeredComponentsFolders,
+    ];
+  }
 
   // View registry
   private _viewRegistry: ViewRegistry
@@ -65,6 +77,9 @@ export default class ProgrammaticBases extends Plugin {
 
       // Create the file manager
       this._fileManager = new BaseFileManager(this.app);
+
+      // Register commands
+      this.addCommand(createBaseFromTemplateCommand());
 
       // Configure the settings
       await this.loadSettings();

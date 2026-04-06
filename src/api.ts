@@ -6,6 +6,7 @@ import { Property } from 'primitives/property';
 import { CardViewBuilder } from 'views/cardViewBuilder';
 import { TableViewBuilder } from 'views/tableViewBuilder';
 import { ListViewBuilder } from 'views/listViewBuilder';
+import { ComponentsFolder } from 'settings';
 
 export class ProgrammaticBasesAPI {
   //-- CLASSES
@@ -14,7 +15,24 @@ export class ProgrammaticBasesAPI {
   TableViewBuilder = TableViewBuilder;
   ListViewBuilder = ListViewBuilder;
   Property = Property;
-  
+
+  //-- COMPONENT FOLDERS
+  private _registeredComponentsFolders: ComponentsFolder[] = [];
+
+  /** Returns a copy of the runtime-registered component folders. */
+  get registeredComponentsFolders(): ComponentsFolder[] {
+    return [...this._registeredComponentsFolders];
+  }
+
+  /**
+   * Registers a component folder at runtime (e.g. from another plugin).
+   * Runtime-registered folders are appended after settings-configured ones.
+   * @param folder - the named folder to register
+   */
+  registerComponentsFolder(folder: ComponentsFolder): void {
+    this._registeredComponentsFolders.push(folder);
+  }
+
   //-- METHODS
   get createBase(): typeof ProgrammaticBases.instance.fileManager.createBase {
     return ProgrammaticBases.instance.fileManager.createBase;
@@ -25,9 +43,4 @@ export class ProgrammaticBasesAPI {
 
   //-- DEBUG
   debug = DebugUtils;
-  //debugGame = DebugUtils.debugGame;
-  //debugTask = DebugUtils.debugTask;
-  //promiseTesting = DebugUtils.promiseTesting;
-  //testJsYaml = DebugUtils.testJsYaml;
-  //testJsYamlLoad = DebugUtils.testJsYamlLoad;
 }

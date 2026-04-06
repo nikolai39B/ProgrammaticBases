@@ -1,36 +1,70 @@
 import {App, PluginSettingTab, Setting} from "obsidian";
 import ProgrammaticBases from "./main";
 
+/** A named folder containing component YAML parts (views, filters, formulas, etc.). */
+export interface ComponentsFolder {
+  /** Short identifier used as the qualifier in !sub references, e.g. "programmatic-bases". */
+  name: string;
+  /** Vault-relative path to the folder root, e.g. "Templates/ProgrammaticBases/components". */
+  path: string;
+}
+
 export interface ProgrammaticBasesSettings {
-	mySetting: string;
+  /** Vault-relative path to the folder containing full base templates. */
+  basesFolder: string;
+  /** Named folders containing component parts (views, filters, etc.), in priority order. */
+  componentsFolders: ComponentsFolder[];
 }
 
 export const DEFAULT_SETTINGS: ProgrammaticBasesSettings = {
-	mySetting: 'default'
+  basesFolder: 'Templates/ProgrammaticBases/bases',
+  componentsFolders: [{ name: 'programmatic-bases', path: 'Templates/ProgrammaticBases/components' }],
 }
 
 export class ProgrammaticBasesSettingTab extends PluginSettingTab {
-	plugin: ProgrammaticBases;
+  plugin: ProgrammaticBases;
 
-	constructor(app: App, plugin: ProgrammaticBases) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+  constructor(app: App, plugin: ProgrammaticBases) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
 
-	display(): void {
-		const {containerEl} = this;
+  display(): void {
+    const {containerEl} = this;
 
-		containerEl.empty();
+    containerEl.empty();
 
-		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+    new Setting(containerEl)
+      .setName('Bases folder')
+      .setDesc('Vault-relative path to the folder containing full base templates.')
+      .addText(text => text
+        .setPlaceholder('e.g. Templates/ProgrammaticBases/bases')
+        .setValue(this.plugin.settings.basesFolder)
+        .onChange(async (value) => {
+          this.plugin.settings.basesFolder = value.trim();
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Components folders')
+      .setDesc('One entry per line: "name: path". Priority ordered — first match wins for unqualified !sub references. Plugin-registered folders are merged at runtime.')
+      .addTextArea(text => text
+        .setPlaceholder('e.g.\nprogrammatic-bases: Templates/ProgrammaticBases/components')
+        .setValue(this.plugin.settings.componentsFolders.map(f => `${f.name}: ${f.path}`).join('\n'))
+        .onChange(async (value) => {
+          this.plugin.settings.componentsFolders = value
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean) // remove empty lines (e.g. from trailing newlines)
+            .map(line => {
+              const colonIdx = line.indexOf(':');
+              return {
+                name: line.substring(0, colonIdx).trim(),
+                path: line.substring(colonIdx + 1).trim(),
+              };
+            })
+            .filter(f => f.name && f.path);
+          await this.plugin.saveSettings();
+        }));
+  }
 }
