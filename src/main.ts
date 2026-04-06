@@ -1,4 +1,4 @@
-import { Plugin, View } from 'obsidian';
+import { Plugin } from 'obsidian';
 
 import { ProgrammaticBasesAPI } from 'api';
 import { createBaseFromTemplateCommand } from 'commands/createBaseFromTemplate';
@@ -14,10 +14,10 @@ import { BaseFileManager } from 'fileManagement/baseFileManager';
 
 import { PluginDependencyManager } from '../../pluginUtilsCommon/src/dependency';
 
-// ─── Programmatic Bases ──────────────────────────────────────────────────────
+// ── Programmatic Bases
 
 export default class ProgrammaticBases extends Plugin {
-  //-- ATTRIBUTES
+  // ── Attributes
 
   // Instance
   private static _instance: ProgrammaticBases;
@@ -27,6 +27,9 @@ export default class ProgrammaticBases extends Plugin {
   private _fileManager: BaseFileManager;
   get fileManager(): BaseFileManager { return this._fileManager; }
   
+  // API
+  private _api: ProgrammaticBasesAPI;
+
   // Settings
   private _settings: ProgrammaticBasesSettings;
   get settings(): ProgrammaticBasesSettings { return this._settings; }
@@ -38,7 +41,7 @@ export default class ProgrammaticBases extends Plugin {
   get allComponentsFolders(): ComponentsFolder[] {
     return [
       ...this._settings.componentsFolders,
-      ...window.programmaticBases.registeredComponentsFolders,
+      ...this._api.registeredComponentsFolders,
     ];
   }
 
@@ -49,6 +52,9 @@ export default class ProgrammaticBases extends Plugin {
   // Installers
   private _viewInstallers: ViewTypeInstaller[];
 
+  // Dependency manager
+  private dependencyManager: PluginDependencyManager;
+
   async onload() {
     console.log("ProgrammaticBases onload() begin")
 
@@ -56,7 +62,7 @@ export default class ProgrammaticBases extends Plugin {
     this.dependencyManager = new PluginDependencyManager(this);
     //this.dependencyManager.addDependency("task-base", "task-base:loaded");
     await this.dependencyManager.registerPluginLoader(() => this.loadPlugin() );
-    
+
     console.log("ProgrammaticBases onload() complete");
   }
 
@@ -64,7 +70,8 @@ export default class ProgrammaticBases extends Plugin {
     try {
       // Set the instance
       ProgrammaticBases._instance = this;
-      window.programmaticBases = new ProgrammaticBasesAPI();
+      this._api = new ProgrammaticBasesAPI();
+      window.programmaticBases = this._api;
 
       // Install the views
       this._viewRegistry = new ViewRegistry();
@@ -109,7 +116,4 @@ export default class ProgrammaticBases extends Plugin {
     await this.saveData(this._settings);
   }
 
-
-  //-- ATTRIBUTES
-  private dependencyManager: PluginDependencyManager;
 }
