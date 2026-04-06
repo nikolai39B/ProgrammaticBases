@@ -1,4 +1,4 @@
-import { Plugin, View } from 'obsidian';
+import { Plugin } from 'obsidian';
 
 import { ProgrammaticBasesAPI } from 'api';
 import { DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
@@ -13,10 +13,10 @@ import { BaseFileManager } from 'fileManagement/baseFileManager';
 
 import { PluginDependencyManager } from '../../pluginUtilsCommon/src/dependency';
 
-// ─── Programmatic Bases ──────────────────────────────────────────────────────
+// ── Programmatic Bases
 
 export default class ProgrammaticBases extends Plugin {
-  //-- ATTRIBUTES
+  // ── Attributes
 
   // Instance
   private static _instance: ProgrammaticBases;
@@ -37,6 +37,9 @@ export default class ProgrammaticBases extends Plugin {
   // Installers
   private _viewInstallers: ViewTypeInstaller[];
 
+  // Dependency manager
+  private dependencyManager: PluginDependencyManager;
+
   async onload() {
     console.log("ProgrammaticBases onload() begin")
 
@@ -44,7 +47,7 @@ export default class ProgrammaticBases extends Plugin {
     this.dependencyManager = new PluginDependencyManager(this);
     //this.dependencyManager.addDependency("task-base", "task-base:loaded");
     await this.dependencyManager.registerPluginLoader(() => this.loadPlugin() );
-    
+
     console.log("ProgrammaticBases onload() complete");
   }
 
@@ -94,7 +97,4 @@ export default class ProgrammaticBases extends Plugin {
     await this.saveData(this._settings);
   }
 
-
-  //-- ATTRIBUTES
-  private dependencyManager: PluginDependencyManager;
 }

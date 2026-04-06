@@ -2,11 +2,11 @@ import {App, PluginSettingTab, Setting} from "obsidian";
 import ProgrammaticBases from "./main";
 
 export interface ProgrammaticBasesSettings {
-	mySetting: string;
+	templateDirectory: string;
 }
 
 export const DEFAULT_SETTINGS: ProgrammaticBasesSettings = {
-	mySetting: 'default'
+	templateDirectory: ''
 }
 
 export class ProgrammaticBasesSettingTab extends PluginSettingTab {
@@ -23,13 +23,13 @@ export class ProgrammaticBasesSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
+			.setName('Template directory')
+			.setDesc('Vault-relative path used as the base directory when resolving !sub references in YAML templates.')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setPlaceholder('e.g. Templates/TaskBase')
+				.setValue(this.plugin.settings.templateDirectory)
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.templateDirectory = value;
 					await this.plugin.saveSettings();
 				}));
 	}
