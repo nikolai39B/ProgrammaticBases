@@ -28,16 +28,18 @@ This plugin exposes a programmatic API for creating and modifying Obsidian [Base
 
 ### View type extension system
 
-New view types are added via declaration merging + installer pattern:
+Each view type follows a three-layer pattern:
 
-1. **Declare** the type in `ViewTypeRegistry` (`src/views/viewType.ts`):
-   ```ts
-   declare module "./viewType" {
-     interface ViewTypeRegistry { gantt: GanttViewConfig; }
-   }
-   ```
-2. **Implement** `*Config`, `*Builder` (extending `BaseViewBuilder<T>`), and `*Installer` (extending `ViewTypeInstallerBase<K>`).
-3. **Register** the installer in `main.ts` alongside the existing three installers.
+| Layer | Files | Purpose |
+|---|---|---|
+| Config | `*ViewConfig.ts` | Holds immutable view data; extends `ViewConfig` |
+| Builder | `*ViewBuilder.ts` | Fluent builder; extends `BaseViewBuilder<T>` |
+| Installer | `*ViewInstaller.ts` | Registers the type with `ViewRegistry`; extends `ViewTypeInstallerBase<K>` |
+
+To add a new view type:
+1. **Declare** it in `ViewTypeRegistry` via declaration merging in `src/views/viewType.ts`.
+2. **Implement** the three files above.
+3. **Register** the installer in `main.ts` alongside the existing three.
 
 `ViewRegistry` enforces uniqueness — registering a duplicate type throws. Deregistration is always a no-op if not found.
 
@@ -46,7 +48,20 @@ New view types are added via declaration merging + installer pattern:
 All config classes use a **builder → validate → build** pattern:
 - Builders accumulate options via fluent setters (all return `this`).
 - `build()` calls `validate()` then `buildInternal()` (for view builders) or constructs directly (for `BaseBuilder`).
-- `BaseBuilder` can be initialized from an existing `BaseConfig` to enable round-trip editing.
+- `BaseBuilder` can be initialized from an existing `BaseConfig` + `ViewRegistry` to reconstruct mutable builders for editing.
+
+### File management
+
+`BaseFileManager` wraps the Obsidian vault API:
+- `createBase` — throws if the file already exists.
+- `writeBase` — upserts (creates or overwrites).
+- Automatically appends `.base` extension if omitted and creates intermediate directories.
+
+### Public API surface
+
+`src/api.ts` → `ProgrammaticBasesAPI` exposes on `window.programmaticBases`:
+- Classes: `BaseBuilder`, `CardViewBuilder`, `TableViewBuilder`, `ListViewBuilder`, `Property`
+- Methods: `createBase`, `writeBase` (delegated from `BaseFileManager`)
 
 ### Plugin lifecycle
 
@@ -63,7 +78,7 @@ All config classes use a **builder → validate → build** pattern:
 import { BaseConfig } from 'bases/baseConfig';  // → src/bases/baseConfig.ts
 import { ViewRegistry } from 'views/viewRegistry';
 ```
-`vitest.config.ts` mirrors these aliases explicitly — update both when adding new top-level directories under `src/`.
+`vitest.config.ts` mirrors these aliases explicitly — update **both** when adding new top-level directories under `src/`.
 
 ### Serialization
 
@@ -85,7 +100,7 @@ The project uses strict null checks and `noUncheckedIndexedAccess` but not the f
 | `src/api.ts` | Public API surface (`window.programmaticBases`) |
 | `src/bases/` | `BaseConfig`, `BaseBuilder`, options types |
 | `src/views/` | View configs, builders, installers, registry, type system |
-| `src/primitives/` | Shared domain types: `Property`, `Filter`, `Formula`, etc. |
+| `src/primitives/` | Leaf value types: `Property`, `Filter`/`FilterGroup`, `Formula`, `PropertyDisplay`, `PropertyOrder` — all serialize/deserialize symmetrically |
 | `src/fileManagement/` | Vault I/O: create/write `.base` files, deserialization |
 | `src/utils/` | `SerializationUtils` (serialize/deserialize arrays/records) |
 | `src/tests/` | All vitest tests + `fixtures/` (YAML samples) |
