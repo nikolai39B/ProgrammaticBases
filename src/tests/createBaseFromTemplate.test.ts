@@ -35,17 +35,24 @@ function makeTFolder(children: (TFile | TFolder)[] = []): TFolder {
   return folder;
 }
 
+/** Wraps a TFile in a vault TemplateOption. */
+function makeVaultTemplate(file: TFile) {
+  return { source: 'vault' as const, file };
+}
+
 function makePlugin(overrides: {
   basesFolder?: string;
   folderResult?: TFolder | null;
   activeFile?: (TFile & { parent?: { path: string } | null }) | null;
   fileAtPath?: unknown;
+  allSources?: Map<string, unknown>;
 } = {}) {
   const {
     basesFolder = 'Templates/bases',
     folderResult = makeTFolder(),
     activeFile = null,
     fileAtPath = null,
+    allSources = new Map(),
   } = overrides;
 
   const vault = {
@@ -64,20 +71,22 @@ function makePlugin(overrides: {
 
   return {
     app: { vault, workspace } as any,
-    settings: { basesFolder },
-    allComponentsFolders: [] as any[],
+    settings: { basesFolder, componentsFolder: 'Templates/components' },
+    allSources,
+    componentsFolder: 'Templates/components',
     viewRegistry: {} as any,
     fileManager,
   } as any;
 }
 
-/** Creates a mock VaultDeserializer instance with a configurable deserialize spy. */
+/** Creates a mock VaultDeserializer with configurable deserialize/deserializeContent spies. */
 function mockDeserializer(result: unknown = { views: [] }) {
   const deserialize = vi.fn().mockResolvedValue(result);
+  const deserializeContent = vi.fn().mockResolvedValue(result);
   vi.mocked(VaultDeserializer).mockImplementation(function() {
-    return { deserialize };
+    return { deserialize, deserializeContent };
   } as any);
-  return deserialize;
+  return { deserialize, deserializeContent };
 }
 
 /** Wires BaseConfig.deserialize to return a mock config object. */
@@ -98,9 +107,9 @@ describe('createBaseFromTemplateCommand', () => {
     expect(cmd.id).toBe('create-base-from-template');
   });
 
-  it('shows a Notice and does not open a modal when basesFolder is not a TFolder', () => {
+  it('shows a Notice when there are no vault templates and no plugin templates', () => {
     const openSpy = vi.spyOn(SuggestModal.prototype, 'open');
-    const plugin = makePlugin({ folderResult: null });
+    const plugin = makePlugin({ folderResult: null, allSources: new Map() });
     createBaseFromTemplateCommand(plugin).callback?.();
     expect(Notice).toHaveBeenCalledOnce();
     expect(openSpy).not.toHaveBeenCalled();
@@ -110,6 +119,15 @@ describe('createBaseFromTemplateCommand', () => {
     const openSpy = vi.spyOn(SuggestModal.prototype, 'open');
     createBaseFromTemplateCommand(makePlugin()).callback?.();
     expect(openSpy).toHaveBeenCalledOnce();
+  });
+
+  it('opens a TemplatePicker when there are plugin templates even without a vault folder', () => {
+    const openSpy = vi.spyOn(SuggestModal.prototype, 'open');
+    const sources = new Map([['my-plugin', { name: 'my-plugin', templates: { 'dashboard': 'views: []' } }]]);
+    const plugin = makePlugin({ folderResult: null, allSources: sources });
+    createBaseFromTemplateCommand(plugin).callback?.();
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(Notice).not.toHaveBeenCalled();
   });
 });
 
@@ -124,28 +142,28 @@ describe('TemplatePicker', () => {
   });
 
   describe('getSuggestions()', () => {
-    it('returns [] when the bases folder is not found', () => {
+    it('returns [] when the bases folder is not found and there are no plugin templates', () => {
       plugin.app.vault.getFolderByPath.mockReturnValue(null);
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('anything')).toEqual([]);
     });
 
-    it('returns only .yaml files from the folder', () => {
-      const yaml = makeTFile('template', 'yaml');
-      const md = makeTFile('notes', 'md');
-      const folder = makeTFolder([yaml, md, makeTFolder()]);
+    it('returns only .yaml files from the folder as vault TemplateOptions', () => {
+      const yamlFile = makeTFile('template', 'yaml');
+      const mdFile = makeTFile('notes', 'md');
+      const folder = makeTFolder([yamlFile, mdFile, makeTFolder()]);
       plugin.app.vault.getFolderByPath.mockReturnValue(folder);
       const picker = new TemplatePicker(plugin.app, plugin);
-      expect(picker.getSuggestions('')).toEqual([yaml]);
+      expect(picker.getSuggestions('')).toEqual([makeVaultTemplate(yamlFile)]);
     });
 
-    it('filters files by query, case-insensitively', () => {
+    it('filters vault files by query, case-insensitively', () => {
       const alpha = makeTFile('Alpha', 'yaml');
       const beta = makeTFile('Beta', 'yaml');
       plugin.app.vault.getFolderByPath.mockReturnValue(makeTFolder([alpha, beta]));
       const picker = new TemplatePicker(plugin.app, plugin);
-      expect(picker.getSuggestions('alp')).toEqual([alpha]);
-      expect(picker.getSuggestions('ALP')).toEqual([alpha]);
+      expect(picker.getSuggestions('alp')).toEqual([makeVaultTemplate(alpha)]);
+      expect(picker.getSuggestions('ALP')).toEqual([makeVaultTemplate(alpha)]);
     });
 
     it('returns all .yaml files when query is empty', () => {
@@ -153,15 +171,50 @@ describe('TemplatePicker', () => {
       const b = makeTFile('b', 'yaml');
       plugin.app.vault.getFolderByPath.mockReturnValue(makeTFolder([a, b]));
       const picker = new TemplatePicker(plugin.app, plugin);
-      expect(picker.getSuggestions('')).toEqual([a, b]);
+      expect(picker.getSuggestions('')).toEqual([makeVaultTemplate(a), makeVaultTemplate(b)]);
+    });
+
+    it('returns vault templates before plugin templates', () => {
+      const vaultFile = makeTFile('my-vault-template', 'yaml');
+      plugin.app.vault.getFolderByPath.mockReturnValue(makeTFolder([vaultFile]));
+      plugin.allSources = new Map([
+        ['my-plugin', { name: 'my-plugin', templates: { 'dashboard': 'views: []' } }],
+      ]);
+      const picker = new TemplatePicker(plugin.app, plugin);
+      expect(picker.getSuggestions('')).toEqual([
+        makeVaultTemplate(vaultFile),
+        { source: 'plugin', sourceName: 'my-plugin', templateName: 'dashboard', content: 'views: []' },
+      ]);
+    });
+
+    it('returns plugin templates from registered sources', () => {
+      plugin.app.vault.getFolderByPath.mockReturnValue(null);
+      plugin.allSources = new Map([
+        ['my-plugin', { name: 'my-plugin', templates: { 'dashboard': 'views: []' } }],
+      ]);
+      const picker = new TemplatePicker(plugin.app, plugin);
+      expect(picker.getSuggestions('')).toEqual([
+        { source: 'plugin', sourceName: 'my-plugin', templateName: 'dashboard', content: 'views: []' },
+      ]);
+    });
+
+    it('filters plugin templates by query against "sourceName:templateName"', () => {
+      plugin.app.vault.getFolderByPath.mockReturnValue(null);
+      plugin.allSources = new Map([
+        ['my-plugin', { name: 'my-plugin', templates: { 'dashboard': 'v: []', 'task-list': 'v: []' } }],
+      ]);
+      const picker = new TemplatePicker(plugin.app, plugin);
+      expect(picker.getSuggestions('dash')).toEqual([
+        { source: 'plugin', sourceName: 'my-plugin', templateName: 'dashboard', content: 'v: []' },
+      ]);
     });
   });
 
   describe('onChooseSuggestion()', () => {
-    it('opens an OutputPathModal for the chosen file', () => {
+    it('opens an OutputPathModal for the chosen template', () => {
       const openSpy = vi.spyOn(Modal.prototype, 'open');
       const picker = new TemplatePicker(plugin.app, plugin);
-      picker.onChooseSuggestion(makeTFile());
+      picker.onChooseSuggestion(makeVaultTemplate(makeTFile()));
       expect(openSpy).toHaveBeenCalledOnce();
     });
   });
@@ -171,13 +224,24 @@ describe('TemplatePicker', () => {
 
 describe('OutputPathModal', () => {
   let plugin: ReturnType<typeof makePlugin>;
-  const template = makeTFile('my-template');
+  const templateFile = makeTFile('my-template');
+  const template = makeVaultTemplate(templateFile);
 
   beforeEach(() => {
     vi.clearAllMocks();
     plugin = makePlugin();
     mockDeserializer();
     mockBaseConfig();
+  });
+
+  // ── onClose ────────────────────────────────────────────────────────────────
+
+  describe('onClose()', () => {
+    it('empties contentEl', () => {
+      const modal = new OutputPathModal(plugin.app, plugin, template);
+      modal.onClose();
+      expect(modal.contentEl.empty).toHaveBeenCalledOnce();
+    });
   });
 
   // ── constructor ─────────────────────────────────────────────────────────────
@@ -202,16 +266,30 @@ describe('OutputPathModal', () => {
       const modal = new OutputPathModal(plugin.app, plugin, template);
       expect((modal as any).outputPath).toBe('my-template');
     });
+
+    it('uses templateName as the basename for plugin templates', () => {
+      const pluginTemplate = { source: 'plugin' as const, sourceName: 'my-plugin', templateName: 'dashboard', content: '' };
+      const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate);
+      expect((modal as any).outputPath).toBe('dashboard');
+    });
   });
 
   // ── create() ───────────────────────────────────────────────────────────────
 
   describe('create()', () => {
-    it('calls VaultDeserializer.deserialize with the template path', async () => {
-      const deserialize = mockDeserializer();
+    it('calls VaultDeserializer.deserialize with the template path for vault templates', async () => {
+      const { deserialize } = mockDeserializer();
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create();
-      expect(deserialize).toHaveBeenCalledWith(template.path);
+      expect(deserialize).toHaveBeenCalledWith(templateFile.path);
+    });
+
+    it('calls VaultDeserializer.deserializeContent for plugin templates', async () => {
+      const { deserializeContent } = mockDeserializer();
+      const pluginTemplate = { source: 'plugin' as const, sourceName: 'my-plugin', templateName: 'dashboard', content: 'views: []' };
+      const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate);
+      await (modal as any).create();
+      expect(deserializeContent).toHaveBeenCalledWith('views: []', 'my-plugin:dashboard');
     });
 
     it('calls BaseConfig.deserialize with the raw data and view registry', async () => {
@@ -260,9 +338,43 @@ describe('OutputPathModal', () => {
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Overwrote'));
     });
 
+    it('calls close() after a successful create', async () => {
+      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
+      const modal = new OutputPathModal(plugin.app, plugin, template);
+      const closeSpy = vi.spyOn(modal, 'close');
+      await (modal as any).create();
+      expect(closeSpy).toHaveBeenCalledOnce();
+    });
+
+    it('calls close() after a successful overwrite', async () => {
+      const modal = new OutputPathModal(plugin.app, plugin, template);
+      const closeSpy = vi.spyOn(modal, 'close');
+      await (modal as any).create(true);
+      expect(closeSpy).toHaveBeenCalledOnce();
+    });
+
+    it('does not append .base when outputPath already has an extension', async () => {
+      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
+      const modal = new OutputPathModal(plugin.app, plugin, template);
+      (modal as any).outputPath = 'my-file.base';
+      await (modal as any).create();
+      expect(plugin.app.vault.getAbstractFileByPath).toHaveBeenCalledWith('my-file.base');
+    });
+
+    it('appends .base for the existence check when outputPath has no extension', async () => {
+      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
+      const modal = new OutputPathModal(plugin.app, plugin, template);
+      (modal as any).outputPath = 'my-file';
+      await (modal as any).create();
+      expect(plugin.app.vault.getAbstractFileByPath).toHaveBeenCalledWith('my-file.base');
+    });
+
     it('shows an error Notice when deserialization throws', async () => {
       vi.mocked(VaultDeserializer).mockImplementation(function() {
-        return { deserialize: vi.fn().mockRejectedValue(new Error('YAML parse error')) };
+        return {
+          deserialize: vi.fn().mockRejectedValue(new Error('YAML parse error')),
+          deserializeContent: vi.fn().mockRejectedValue(new Error('YAML parse error')),
+        };
       } as any);
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create();
