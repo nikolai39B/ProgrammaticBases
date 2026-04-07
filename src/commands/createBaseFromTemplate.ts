@@ -2,14 +2,13 @@ import { App, Command, Modal, Notice, Setting, SuggestModal, TFile, TFolder, nor
 import ProgrammaticBases from 'main';
 import { VaultDeserializer } from 'fileManagement/vaultDeserializer';
 import { BaseConfig } from 'bases/baseConfig';
-import { BaseTemplate } from 'settings';
 
 type TemplateOption =
   | { source: 'vault'; file: TFile }
-  | { source: 'plugin'; template: BaseTemplate };
+  | { source: 'plugin'; sourceName: string; templateName: string; content: string };
 
-function templateName(opt: TemplateOption): string {
-  return opt.source === 'vault' ? opt.file.basename : opt.template.name;
+function templateDisplayName(opt: TemplateOption): string {
+  return opt.source === 'vault' ? opt.file.basename : `${opt.sourceName}:${opt.templateName}`;
 }
 
 /** Returns the Obsidian `Command` object for the "Create base from template" command. */
@@ -19,7 +18,7 @@ export function createBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
     name: 'Create base from template',
     callback: () => {
       const hasVaultFolder = plugin.app.vault.getFolderByPath(plugin.settings.basesFolder) instanceof TFolder;
-      const hasPluginTemplates = plugin.allBaseTemplates.length > 0;
+      const hasPluginTemplates = [...plugin.allSources.values()].some(s => s.templates && Object.keys(s.templates).length > 0);
       if (!hasVaultFolder && !hasPluginTemplates) {
         new Notice('No templates found. Configure a bases folder in settings or install a template plugin.');
         return;
@@ -50,20 +49,22 @@ export class TemplatePicker extends SuggestModal<TemplateOption> {
           .map(f => ({ source: 'vault', file: f }))
       : [];
 
-    // Plugin-registered templates
-    const pluginTemplates: TemplateOption[] = this.plugin.allBaseTemplates
-      .filter(t => t.name.toLowerCase().includes(q))
-      .map(t => ({ source: 'plugin', template: t }));
+    // Plugin-registered templates, flattened from all sources
+    const pluginTemplates: TemplateOption[] = [];
+    for (const [sourceName, externalSource] of this.plugin.allSources) {
+      for (const [templateName, content] of Object.entries(externalSource.templates ?? {})) {
+        if (`${sourceName}:${templateName}`.toLowerCase().includes(q)) {
+          pluginTemplates.push({ source: 'plugin', sourceName, templateName, content });
+        }
+      }
+    }
 
     return [...vaultTemplates, ...pluginTemplates];
   }
 
-  /** Renders a suggestion item showing the template name and its source. */
+  /** Renders a suggestion item showing the template display name. */
   renderSuggestion(opt: TemplateOption, el: HTMLElement) {
-    el.setText(templateName(opt));
-    if (opt.source === 'plugin') {
-      el.createSpan({ cls: 'suggestion-flair', text: opt.template.source });
-    }
+    el.setText(templateDisplayName(opt));
   }
 
   /** Opens the output path modal for the chosen template. */
@@ -82,7 +83,7 @@ export class OutputPathModal extends Modal {
 
     const activeFile = app.workspace.getActiveFile();
     const folder = activeFile?.parent?.path ?? '';
-    const name = templateName(template);
+    const name = template.source === 'vault' ? template.file.basename : template.templateName;
     this.outputPath = folder ? normalizePath(`${folder}/${name}`) : name;
   }
 
@@ -126,10 +127,10 @@ export class OutputPathModal extends Modal {
       }
 
       // Deserialize the template
-      const deserializer = new VaultDeserializer(this.app, this.plugin.allComponentSources, this.plugin.allComponentsFolders);
+      const deserializer = new VaultDeserializer(this.app, this.plugin.allSources, this.plugin.componentsFolder);
       const raw = this.template.source === 'vault'
         ? await deserializer.deserialize(this.template.file.path)
-        : await deserializer.deserializeContent(this.template.template.content, `${this.template.template.source}:${this.template.template.name}`);
+        : await deserializer.deserializeContent(this.template.content, `${this.template.sourceName}:${this.template.templateName}`);
 
       const config = BaseConfig.deserialize(raw as Record<string, unknown>, this.plugin.viewRegistry);
 

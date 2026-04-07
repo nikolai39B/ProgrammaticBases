@@ -1,0 +1,1 @@
+adjust settings UI so that it autofills / only accepts valid folders

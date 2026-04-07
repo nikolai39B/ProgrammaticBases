@@ -6,7 +6,12 @@ import { Property } from 'primitives/property';
 import { CardViewBuilder } from 'views/cardViewBuilder';
 import { TableViewBuilder } from 'views/tableViewBuilder';
 import { ListViewBuilder } from 'views/listViewBuilder';
-import { BaseTemplate, ComponentsFolder, ComponentSource } from 'settings';
+import { ExternalSource } from 'settings';
+
+export interface RegisterSourceOptions {
+  /** If true, merges with an existing source of the same name instead of throwing. Later keys win. */
+  append?: boolean;
+}
 
 export class ProgrammaticBasesAPI {
   //-- CLASSES
@@ -16,50 +21,32 @@ export class ProgrammaticBasesAPI {
   ListViewBuilder = ListViewBuilder;
   Property = Property;
 
-  //-- COMPONENT FOLDERS
-  private _registeredComponentsFolders: ComponentsFolder[] = [];
+  //-- EXTERNAL SOURCES
+  private _registeredSources: Map<string, ExternalSource> = new Map();
 
-  /** Returns a copy of the runtime-registered component folders. */
-  get registeredComponentsFolders(): ComponentsFolder[] {
-    return [...this._registeredComponentsFolders];
+  /** Returns a copy of the registered external sources map. */
+  get registeredSources(): Map<string, ExternalSource> {
+    return new Map(this._registeredSources);
   }
 
-  /** Registers a vault component folder at runtime (e.g. from another plugin). */
-  registerComponentsFolder(folder: ComponentsFolder): void {
-    this._registeredComponentsFolders.push(folder);
-  }
-
-  //-- COMPONENT SOURCES
-  private _registeredComponentSources: ComponentSource[] = [];
-
-  /** Returns a copy of the runtime-registered in-memory component sources. */
-  get registeredComponentSources(): ComponentSource[] {
-    return [...this._registeredComponentSources];
-  }
-
-  /** Registers an in-memory component source at runtime (e.g. from another plugin). */
-  registerComponentSource(source: ComponentSource): void {
-    if (this._registeredComponentSources.some(s => s.name === source.name)) {
-      throw new Error(`A component source named "${source.name}" is already registered.`);
-    }
-    this._registeredComponentSources.push(source);
-  }
-
-  //-- BASE TEMPLATES
-  private _registeredBaseTemplates: BaseTemplate[] = [];
-
-  /** Returns a copy of the runtime-registered base templates. */
-  get registeredBaseTemplates(): BaseTemplate[] {
-    return [...this._registeredBaseTemplates];
-  }
-
-  /** Registers one or more base templates at runtime, shown alongside vault templates in the picker. */
-  registerBaseTemplate(templates: BaseTemplate[]): void {
-    for (const template of templates) {
-      if (this._registeredBaseTemplates.some(t => t.source === template.source && t.name === template.name)) {
-        throw new Error(`A base template named "${template.name}" is already registered for source "${template.source}".`);
+  /**
+   * Registers an external source providing components and/or base templates.
+   * Throws if a source with the same name is already registered, unless `append` is true,
+   * in which case the components and templates are merged (later keys win).
+   */
+  registerSource(source: ExternalSource, options: RegisterSourceOptions = {}): void {
+    const existing = this._registeredSources.get(source.name);
+    if (existing) {
+      if (!options.append) {
+        throw new Error(`An external source named "${source.name}" is already registered.`);
       }
-      this._registeredBaseTemplates.push(template);
+      this._registeredSources.set(source.name, {
+        name: source.name,
+        components: { ...existing.components, ...source.components },
+        templates: { ...existing.templates, ...source.templates },
+      });
+    } else {
+      this._registeredSources.set(source.name, source);
     }
   }
 

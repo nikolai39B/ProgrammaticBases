@@ -2,7 +2,7 @@ import { Plugin } from 'obsidian';
 
 import { ProgrammaticBasesAPI } from 'api';
 import { createBaseFromTemplateCommand } from 'commands/createBaseFromTemplate';
-import { BaseTemplate, ComponentsFolder, ComponentSource, DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
+import { ExternalSource, DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
 
 import { CardViewInstaller } from 'views/cardViewInstaller';
 import { ListViewInstaller } from 'views/listViewInstaller';
@@ -34,25 +34,14 @@ export default class ProgrammaticBases extends Plugin {
   private _settings: ProgrammaticBasesSettings;
   get settings(): ProgrammaticBasesSettings { return this._settings; }
 
-  /** In-memory component sources registered by other plugins at runtime. */
-  get allComponentSources(): ComponentSource[] {
-    return this._api.registeredComponentSources;
+  /** External sources registered by other plugins at runtime. */
+  get allSources(): Map<string, ExternalSource> {
+    return this._api.registeredSources;
   }
 
-  /**
-   * All component folders: settings-configured ones first (priority order),
-   * followed by runtime-registered ones from other plugins.
-   */
-  get allComponentsFolders(): ComponentsFolder[] {
-    return [
-      ...this._settings.componentsFolders,
-      ...this._api.registeredComponentsFolders,
-    ];
-  }
-
-  /** Base templates registered by other plugins at runtime. */
-  get allBaseTemplates(): BaseTemplate[] {
-    return this._api.registeredBaseTemplates;
+  /** Vault-relative path to the components folder for unqualified !sub resolution. */
+  get componentsFolder(): string {
+    return this._settings.componentsFolder;
   }
 
   // View registry

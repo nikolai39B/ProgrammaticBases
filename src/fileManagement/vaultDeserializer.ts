@@ -1,24 +1,25 @@
 import * as yaml from 'js-yaml';
 import { App, normalizePath } from 'obsidian';
-import { ComponentsFolder, ComponentSource } from 'settings';
+import { ExternalSource } from 'settings';
 
 type ResolvedRef =
   | { type: 'vault'; path: string }
   | { type: 'memory'; content: string; id: string };
 
 /**
- * Deserializes YAML files from the Obsidian vault, resolving !sub tags
- * by recursively loading and substituting referenced files.
+ * Deserializes YAML files from the Obsidian vault, resolving !sub tags.
  *
- * !sub references are resolved against in-memory `componentSources` first,
- * then vault `componentsFolders` — both in priority order. A qualifier prefix
- * can target a specific source/folder: `!sub task-base:filter/focused.yaml`.
+ * Unqualified !sub refs (e.g. `!sub filter/isTask`) are resolved against the
+ * vault `componentsFolder` only.
+ *
+ * Qualified !sub refs (e.g. `!sub task-base:filter/isTask`) are resolved
+ * against the named external source only.
  */
 export class VaultDeserializer {
   constructor(
     private app: App,
-    private componentSources: ComponentSource[] = [],
-    private componentsFolders: ComponentsFolder[] = [],
+    private sources: Map<string, ExternalSource>,
+    private componentsFolder: string,
   ) {}
 
   /**
@@ -26,79 +27,62 @@ export class VaultDeserializer {
    * @param path - vault-relative path to the YAML file
    */
   deserialize(path: string): Promise<unknown> {
-    return deserializeResolved({ type: 'vault', path }, this.app, new Set(), this.componentSources, this.componentsFolders);
+    return deserializeResolved({ type: 'vault', path }, this.app, new Set(), this.sources, this.componentsFolder);
   }
 
   /**
    * Deserializes a raw YAML string (e.g. from a plugin-registered base template).
-   * !sub references within the content are resolved normally.
-   * @param content - raw YAML string to deserialize
-   * @param name - the template's registered name, used as the root id for circular reference detection
+   * @param content - raw YAML string
+   * @param id - unique identifier for this content, used for circular reference detection
    */
-  deserializeContent(content: string, name: string): Promise<unknown> {
-    return deserializeResolved({ type: 'memory', content, id: name }, this.app, new Set(), this.componentSources, this.componentsFolders);
+  deserializeContent(content: string, id: string): Promise<unknown> {
+    return deserializeResolved({ type: 'memory', content, id }, this.app, new Set(), this.sources, this.componentsFolder);
   }
 }
 
-/**
- * Resolves a !sub reference to either a vault path or in-memory content.
- * In-memory sources are checked before vault folders, both in priority order.
- */
-/** Resolves a ref to a vault path, appending `.yaml` if not already present. */
+/** Resolves a vault ref, appending `.yaml` if not already present. */
 function resolveVaultPath(folderPath: string, ref: string, app: App): string | null {
   const withYaml = ref.endsWith('.yaml') ? ref : `${ref}.yaml`;
   const candidate = normalizePath(`${folderPath}/${withYaml}`);
   return app.vault.getFileByPath(candidate) ? candidate : null;
 }
 
-function resolveRef(ref: string, sources: ComponentSource[], folders: ComponentsFolder[], app: App): ResolvedRef {
+/**
+ * Resolves a !sub reference to either a vault path or in-memory content.
+ *
+ * Qualified refs target a named external source exclusively.
+ * Unqualified refs search the vault components folder exclusively.
+ */
+function resolveRef(ref: string, sources: Map<string, ExternalSource>, componentsFolder: string, app: App): ResolvedRef {
   const colonIdx = ref.indexOf(':');
 
   if (colonIdx !== -1) {
-    // Qualified reference — target a specific named source or folder
+    // Qualified — resolve against the named external source
     const qualifier = ref.substring(0, colonIdx);
-    const relativePath = ref.substring(colonIdx + 1);
+    const key = ref.substring(colonIdx + 1);
 
-    if (relativePath.includes('..')) {
+    if (key.includes('..')) {
       throw new Error(`Invalid !sub path: ${ref}`);
     }
 
-    // Check in-memory sources first
-    const source = sources.find(s => s.name === qualifier);
-    if (source) {
-      const key = normalizePath(relativePath);
-      const content = source.components[key];
-      if (!content) throw new Error(`Component "${relativePath}" not found in source "${qualifier}"`);
-      return { type: 'memory', content, id: `${qualifier}:${key}` };
-    }
+    const source = sources.get(qualifier);
+    if (!source) throw new Error(`Unknown source qualifier "${qualifier}" in !sub: ${ref}`);
 
-    // Fall back to vault folders
-    const folder = folders.find(f => f.name === qualifier);
-    if (!folder) throw new Error(`Unknown component qualifier "${qualifier}" in !sub: ${ref}`);
-    const vaultPath = resolveVaultPath(folder.path, relativePath, app);
-    if (!vaultPath) throw new Error(`Component "${relativePath}" not found in folder "${qualifier}"`);
-    return { type: 'vault', path: vaultPath };
+    const content = source.components?.[key];
+    if (!content) throw new Error(`Component "${key}" not found in source "${qualifier}"`);
+
+    return { type: 'memory', content, id: `${qualifier}:${key}` };
   }
 
-  // Unqualified reference — search in priority order
+  // Unqualified — resolve against the vault components folder
   if (ref.includes('..')) {
     throw new Error(`Invalid !sub path: ${ref}`);
   }
 
-  const key = normalizePath(ref);
+  const vaultPath = resolveVaultPath(componentsFolder, ref, app);
+  if (vaultPath) return { type: 'vault', path: vaultPath };
 
-  for (const source of sources) {
-    if (source.components[key]) {
-      return { type: 'memory', content: source.components[key], id: `${source.name}:${key}` };
-    }
-  }
-
-  for (const folder of folders) {
-    const vaultPath = resolveVaultPath(folder.path, ref, app);
-    if (vaultPath) return { type: 'vault', path: vaultPath };
-  }
-
-  throw new Error(`Component not found: "${ref}" (searched ${sources.length} source(s), ${folders.length} folder(s))`);
+  throw new Error(`Component not found: "${ref}" in vault folder "${componentsFolder}"`);
 }
 
 /**
@@ -109,57 +93,42 @@ async function deserializeResolved(
   resolved: ResolvedRef,
   app: App,
   visited: Set<string>,
-  sources: ComponentSource[],
-  folders: ComponentsFolder[],
+  sources: Map<string, ExternalSource>,
+  componentsFolder: string,
 ): Promise<unknown> {
   const id = resolved.type === 'vault' ? resolved.path : resolved.id;
 
-  // Check for circular references
   if (visited.has(id)) {
     throw new Error(`Circular !sub reference detected: ${id}`);
   }
 
   let content: string;
-
   if (resolved.type === 'vault') {
-    // If the component is a vault file, read it
     const file = app.vault.getFileByPath(resolved.path);
     if (!file) throw new Error(`File not found: ${resolved.path}`);
     content = await app.vault.read(file);
   } else {
-    // Otherwise, the component is already in memory so use it directly
     content = resolved.content;
   }
 
-  // Build a new schema with an updated visited path
-  const schema = buildSchema(app, new Set([...visited, id]), sources, folders);
-
-  // Load the content as yaml
+  const schema = buildSchema(app, new Set([...visited, id]), sources, componentsFolder);
   const raw = yaml.load(content, { schema });
   return resolvePromises(raw);
 }
 
-/**
- * Builds a js-yaml schema that handles !sub tags by resolving references
- * against in-memory sources and vault folders.
- */
-function buildSchema(app: App, visited: Set<string>, sources: ComponentSource[], folders: ComponentsFolder[]): yaml.Schema {
+function buildSchema(app: App, visited: Set<string>, sources: Map<string, ExternalSource>, componentsFolder: string): yaml.Schema {
   const subTag = new yaml.Type('!sub', {
     kind: 'scalar',
     resolve: (data: unknown) => typeof data === 'string',
     construct: (ref: string) => {
-      const resolved = resolveRef(ref, sources, folders, app);
-      return deserializeResolved(resolved, app, visited, sources, folders);
+      const resolved = resolveRef(ref, sources, componentsFolder, app);
+      return deserializeResolved(resolved, app, visited, sources, componentsFolder);
     },
   });
 
   return yaml.CORE_SCHEMA.extend([subTag]);
 }
 
-/**
- * Recursively walks a parsed YAML value and resolves any promises,
- * including those nested inside arrays and objects.
- */
 async function resolvePromises(value: unknown): Promise<unknown> {
   if (value instanceof Promise) {
     return resolvePromises(await value);
