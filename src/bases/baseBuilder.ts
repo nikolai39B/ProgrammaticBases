@@ -3,6 +3,7 @@
 import ProgrammaticBases from 'main';
 import { BaseConfig } from './baseConfig';
 import { BaseConfigOptions } from './baseConfigOptions';
+import { BaseMetadata } from './baseMetadata';
 import { FilterGroup } from 'primitives/filter'
 import { Formula } from 'primitives/formula';
 import { Property } from 'primitives/property';
@@ -95,6 +96,17 @@ export class BaseBuilder {
   addProperty(property: Property, displayName: string): this {
     this.options.properties ??= [];
     this.options.properties.push(new PropertyDisplay(property, displayName));
+    return this;
+  }
+
+  /**
+   * Sets the plugin-managed metadata for this configuration.
+   *
+   * @param metadata - The metadata to store in the `pb-metadata` key.
+   * @returns The builder instance for chaining.
+   */
+  setMetadata(metadata: BaseMetadata): this {
+    this.options.metadata = metadata;
     return this;
   }
 

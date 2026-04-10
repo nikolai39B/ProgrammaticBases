@@ -3,6 +3,7 @@
 import { FilterGroup } from 'primitives/filter';
 import { Formula } from 'primitives/formula';
 import { PropertyDisplay } from 'primitives/propertyDisplay';
+import { BaseMetadata } from './baseMetadata';
 
 /**
  * Options for constructing a {@link BaseConfig} instance.
@@ -20,4 +21,7 @@ export interface BaseConfigOptions {
    * how a property is labeled in the UI.
    */
   properties?: PropertyDisplay[];
+
+  /** Plugin-managed metadata stored in the `pb-metadata` key. */
+  metadata?: BaseMetadata;
 }

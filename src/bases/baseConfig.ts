@@ -1,6 +1,7 @@
 // baseConfig.ts
 
 import { BaseConfigOptions } from './baseConfigOptions';
+import { BaseMetadata, BaseMetadataUtils } from './baseMetadata';
 import { FilterGroup } from 'primitives/filter';
 import { Formula } from 'primitives/formula';
 import { PropertyDisplay } from 'primitives/propertyDisplay';
@@ -50,7 +51,8 @@ export class BaseConfig {
    * how a property is labeled in the UI.
    */
   get properties(): PropertyDisplay[] | undefined { return this._options.properties; }
-
+  /** Plugin-managed metadata stored in the `pb-metadata` key. */
+  get metadata(): BaseMetadata | undefined { return this._options.metadata; }
 
   /**
    * Serializes this configuration to a plain object.
@@ -76,6 +78,9 @@ export class BaseConfig {
     }
     if (this.properties && this.properties.length > 0) {
       obj.properties = SerializationUtils.serializeRecord(this.properties, p => p.serialize());
+    }
+    if (this.metadata) {
+      obj[BaseMetadataUtils.KEY] = BaseMetadataUtils.serialize(this.metadata);
     }
   
     return obj;
@@ -113,6 +118,10 @@ export class BaseConfig {
         PropertyDisplay.deserialize) :
       undefined;
   
-    return new BaseConfig(views, { filters, formulas, properties });
+    const metadata = raw[BaseMetadataUtils.KEY]
+      ? BaseMetadataUtils.deserialize(raw[BaseMetadataUtils.KEY] as Record<string, unknown>)
+      : undefined;
+
+    return new BaseConfig(views, { filters, formulas, properties, metadata });
   }
 }

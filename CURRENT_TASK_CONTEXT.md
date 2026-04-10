@@ -1,7 +1,74 @@
-# programmatic-bases: Current Task Context
+# Current Task: `pb-metadata` key + Update Base command
 
-## Current Goal
-Wire up `task-base` to register its templates and components with `programmatic-bases` so users get task base templates without any vault setup.
+## Goal
+1. Add `pb-metadata` top-level YAML key to `.base` files to store plugin metadata (starting with `template` — the source template path).
+2. Wire it through `BaseConfig` so it round-trips cleanly.
+3. Implement "create base from template" command (emits metadata on create).
+4. Implement "update base from template" command (reads `pb-metadata.template`, re-applies template, preserves metadata).
+
+## Metadata format
+```yaml
+pb-metadata:
+  template: Templates/TaskBase/bases/dashboard.yaml
+views: ...
+```
+
+---
+
+## Phase 1 — `pb-metadata` in the data model ✅ (execute next)
+
+1. Create `src/bases/baseMetadata.ts` — `BaseMetadata` interface `{ template?: string }` with `serialize()` / `static deserialize()`
+2. Add `metadata?: BaseMetadata` to `BaseConfigOptions` (`baseConfigOptions.ts`)
+3. Update `BaseConfig`:
+   - Add `get metadata()` accessor
+   - `serialize()` — emit `pb-metadata` key if present
+   - `static deserialize()` — read `pb-metadata` key if present
+4. Update `BaseBuilder` — add `setMetadata(metadata: BaseMetadata)` method
+
+## Phase 2 — Emit metadata on create
+
+5. Update `createBaseFromTemplate` command callback: after picking template and output path, set `pb-metadata.template` on the builder before calling `fileManager.createBase()`
+
+## Phase 3 — Update Base command
+
+6. Create `src/commands/updateBaseFromTemplate.ts`:
+   - Read active file (must be a `.base` file)
+   - Read raw YAML, extract `pb-metadata.template`
+   - If missing → show error notice "No template source found in pb-metadata"
+   - Re-run: `VaultDeserializer.deserialize(templatePath)` → `BaseConfig.deserialize()` → preserve `pb-metadata` on the new config → `fileManager.writeBase()`
+7. Register command in `main.ts`
+
+## Phase 4 — Implement create command callback (parallel with Phase 3, depends on Phase 1)
+
+8. Implement the stub `createBaseFromTemplate` callback:
+   - `SuggestModal` listing `.yaml` files in `settings.basesFolder`
+   - Output path modal pre-filled with `<active folder>/<template filename>`
+   - Deserialize template → `BaseConfig.deserialize()` → set `pb-metadata.template` → `fileManager.createBase()`
+   - Note: pass `ProgrammaticBases` plugin instance as parameter to `createBaseFromTemplateCommand(plugin)`
+
+---
+
+## Key files
+| File | Purpose |
+|------|---------|
+| `src/bases/baseMetadata.ts` | NEW — `BaseMetadata` type |
+| `src/bases/baseConfigOptions.ts` | Add `metadata?` |
+| `src/bases/baseConfig.ts` | serialize/deserialize `pb-metadata` |
+| `src/bases/baseBuilder.ts` | Add `setMetadata()` |
+| `src/commands/createBaseFromTemplate.ts` | Set metadata on create |
+| `src/commands/updateBaseFromTemplate.ts` | NEW — update command |
+| `src/main.ts` | Register update command; pass plugin instance to command factories |
+
+## Completed work (prior sessions)
+- `ComponentsFolder` interface in `settings.ts` (`{ name, path }`)
+- Settings: `basesFolder` (template root) + `componentsFolders` (named component roots)
+- Settings UI: textarea for componentsFolders (one `name: path` per line)
+- `VaultDeserializer` overhauled: search-path + qualifier (`name:path`) `!sub` resolution, `normalizePath`, `..` blocked
+- `tsconfig.json` lib bumped to `ES2019`
+- `api.ts`: `registerComponentsFolder()` + `registeredComponentsFolders`
+- `main.ts`: `allComponentsFolders` getter (settings + runtime), `_api` private field
+- `src/commands/createBaseFromTemplate.ts`: stub command registered
+
 
 ---
 

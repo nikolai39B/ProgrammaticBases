@@ -49,12 +49,15 @@ export class Formula {
    *              and the value is the formula content.
    * @returns The deserialized {@link Formula} instance.
    */
-  static deserialize(raw: Record<string, string>): Formula {
+  static deserialize(raw: Record<string, unknown>): Formula {
     const entry = Object.entries(raw)[0];
     if (!entry) { 
       throw new Error("Cannot deserialize an empty record.");
     }
     const [name, content] = entry;
+    if (typeof content !== 'string') {
+      throw new Error(`Formula content must be a string, got: ${typeof content}`);
+    }
     return new Formula(name, content);
   }
 }
