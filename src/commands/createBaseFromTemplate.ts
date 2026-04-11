@@ -56,8 +56,7 @@ export function createBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
 /**
  * Step 1 modal: lets the user search and select a template from all available
  * sources (vault folder and plugin-registered templates).  On selection it
- * advances to {@link ParamCollectionModal} (if the template declares params)
- * or {@link OutputPathModal} (if not).
+ * advances to {@link OutputPathModal}.
  */
 export class TemplatePicker extends SuggestModal<TemplateSource> {
   constructor(app: App, private plugin: ProgrammaticBases) {
@@ -108,74 +107,108 @@ export class TemplatePicker extends SuggestModal<TemplateSource> {
   }
 
   /**
-   * If the template declares params, opens {@link ParamCollectionModal} first.
-   * Otherwise advances directly to {@link OutputPathModal}.
+   * Reads the template's param specs and opens {@link OutputPathModal}, which
+   * collects any params and the output path in a single step.
    *
    * @param source - The template source the user selected.
    */
   async onChooseSuggestion(source: TemplateSource) {
     const harvested = await this.plugin.templateFileManager.readParamSpecsFromTemplate(source);
-    if (Object.keys(harvested).length > 0) {
-      new ParamCollectionModal(this.app, source, harvested, (resolvedParams) => {
-        new OutputPathModal(this.app, this.plugin, source, resolvedParams).open();
-      }).open();
-    } else {
-      new OutputPathModal(this.app, this.plugin, source, {}).open();
-    }
+    new OutputPathModal(this.app, this.plugin, source, harvested).open();
   }
 }
 
-// ── Step 1.5 (conditional): collect params ───────────────────────────────────
+// ── Step 2: collect params + confirm output path ─────────────────────────────
 
 /**
- * Optional step between template selection and path confirmation.
- * Shown only when the selected template declares at least one param.
- * Collects user values for each param, then advances to {@link OutputPathModal}.
+ * Single modal that collects template parameters (if any) and the vault-relative
+ * output path for the new `.base` file.  Param fields are rendered first; the
+ * output path field appears at the bottom.  Defaults to the folder of the
+ * currently active file with the template name as the filename.
+ *
+ * Advances to {@link ConfirmOverwriteModal} if the target path already exists.
  */
-export class ParamCollectionModal extends Modal {
+export class OutputPathModal extends Modal {
+  private outputFolder: string;
+  private outputName: string;
   private values: ResolvedParams = {};
 
   /**
    * @param app - The Obsidian app instance.
-   * @param source - The template source selected in the previous step.
+   * @param plugin - The loaded `ProgrammaticBases` plugin instance.
+   * @param template - The template source selected in the previous step.
    * @param harvested - All params discovered across the template and its components.
-   * @param onSubmit - Called with the flat {@link ResolvedParams} map when the user continues.
    */
   constructor(
     app: App,
-    _source: TemplateSource,
+    private plugin: ProgrammaticBases,
+    private template: TemplateSource,
     private harvested: HarvestedParams,
-    private onSubmit: (resolvedParams: ResolvedParams) => void,
   ) {
     super(app);
 
+    // Default: folder from the active file, name from the template
+    const activeFile = app.workspace.getActiveFile();
+    this.outputFolder = activeFile?.parent?.path ?? '';
+    this.outputName = template instanceof VaultTemplateSource ? template.file.basename : template.templateName;
+
     // Pre-fill defaults and fan out to all source-scoped keys
-    for (const [name, entry] of Object.entries(harvested)) {
+    for (const [paramName, entry] of Object.entries(harvested)) {
       const defaultVal = entry.spec.default ?? (entry.spec.type === 'boolean' ? false : '');
-      this.setParamValue(name, entry, defaultVal as ParamValue);
+      this.setParamValue(paramName, entry, defaultVal as ParamValue);
     }
   }
 
-  onOpen() {
-    this.titleEl.setText('Template parameters');
+  /** Combines outputFolder and outputName into a single vault-relative path. */
+  private get outputPath(): string {
+    return this.outputFolder
+      ? normalizePath(`${this.outputFolder}/${this.outputName}`)
+      : this.outputName;
+  }
 
+  /** Renders param fields (if any), the output location fields, and action buttons. */
+  onOpen() {
+    this.titleEl.setText('Create base from template');
+
+    // Param fields come first
     for (const [name, entry] of Object.entries(this.harvested)) {
       this.renderParamSetting(name, entry);
     }
 
+    // Folder field with autocomplete
+    new Setting(this.contentEl)
+      .setName('Folder')
+      .setDesc('Vault-relative folder for the new .base file.')
+      .addText(text => {
+        text.inputEl.style.width = '100%';
+        new FolderSuggest(this.app, text.inputEl);
+        text
+          .setValue(this.outputFolder)
+          .onChange(value => { this.outputFolder = value.trim(); });
+      });
+
+    // File name field (no extension needed — .base is appended automatically)
+    new Setting(this.contentEl)
+      .setName('File name')
+      .addText(text => {
+        text.inputEl.style.width = '100%';
+        text
+          .setValue(this.outputName)
+          .onChange(value => { this.outputName = value.trim(); });
+      });
+
+    // Action buttons
     new Setting(this.contentEl)
       .addButton(btn => btn
-        .setButtonText('Continue')
+        .setButtonText('Create')
         .setCta()
-        .onClick(() => {
-          this.close();
-          this.onSubmit(this.values);
-        }))
+        .onClick(() => this.create()))
       .addButton(btn => btn
         .setButtonText('Cancel')
         .onClick(() => this.close()));
   }
 
+  /** Cleans up the modal DOM on close. */
   onClose() {
     this.contentEl.empty();
   }
@@ -193,8 +226,9 @@ export class ParamCollectionModal extends Modal {
 
     const setting = new Setting(this.contentEl).setName(label);
 
-    if (isRoot && entry.sources.length > 1) {
-      setting.setDesc(`Sources: ${entry.sources.join(', ')}`);
+    const namedSources = entry.sources.filter(s => s !== '');
+    if (isRoot && namedSources.length > 1) {
+      setting.setDesc(`Sources: ${namedSources.join(', ')}`);
     }
 
     switch (entry.spec.type) {
@@ -232,8 +266,8 @@ export class ParamCollectionModal extends Modal {
         break;
     }
 
-    // Show Split button for merged params (multiple sources) to allow per-source values
-    if (isRoot && entry.sources.length > 1) {
+    // Show Split button only when multiple named (component-level) sources declare this param
+    if (isRoot && namedSources.length > 1) {
       setting.addButton(btn =>
         btn.setButtonText('Split').onClick(() => {
           // Remove the merged-value setting and replace with per-source inputs
@@ -273,67 +307,6 @@ export class ParamCollectionModal extends Modal {
       }
     }
   }
-}
-
-// ── Step 2: confirm output path ──────────────────────────────────────────────
-
-/**
- * Step 2 modal: prompts the user to confirm (or change) the vault-relative output
- * path for the new `.base` file.  Defaults to the folder of the currently active
- * file, with the template name as the filename.  Advances to
- * {@link ConfirmOverwriteModal} if the target path already exists.
- */
-export class OutputPathModal extends Modal {
-  private outputPath: string;
-
-  /**
-   * @param app - The Obsidian app instance.
-   * @param plugin - The loaded `ProgrammaticBases` plugin instance.
-   * @param template - The template source selected in the previous step.
-   * @param resolvedParams - User-supplied param values from {@link ParamCollectionModal}.
-   */
-  constructor(
-    app: App,
-    private plugin: ProgrammaticBases,
-    private template: TemplateSource,
-    private resolvedParams: ResolvedParams,
-  ) {
-    super(app);
-
-    // Default output path: folder of the active file + template name (or just the name if no file is open)
-    const activeFile = app.workspace.getActiveFile();
-    const folder = activeFile?.parent?.path ?? '';
-    const name = template instanceof VaultTemplateSource ? template.file.basename : template.templateName;
-    this.outputPath = folder ? normalizePath(`${folder}/${name}`) : name;
-  }
-
-  /** Renders the output path text field and the Create button. */
-  onOpen() {
-    this.titleEl.setText('Create base from template');
-
-    // Text field pre-populated with the default path; syncs to this.outputPath on every keystroke
-    new Setting(this.contentEl)
-      .setName('Output path')
-      .setDesc('Vault-relative path for the new .base file.')
-      .addText(text => {
-        text.inputEl.style.width = '100%';
-        text
-          .setValue(this.outputPath)
-          .onChange(value => { this.outputPath = value.trim(); });
-      });
-
-    // Primary action button that triggers the write
-    new Setting(this.contentEl)
-      .addButton(btn => btn
-        .setButtonText('Create')
-        .setCta()
-        .onClick(() => this.create()));
-  }
-
-  /** Cleans up the modal DOM on close. */
-  onClose() {
-    this.contentEl.empty();
-  }
 
   /**
    * Deserializes the template, writes the `.base` file, and shows a notice.
@@ -357,8 +330,8 @@ export class OutputPathModal extends Modal {
       }
 
       await (overwrite
-        ? this.plugin.templateFileManager.writeBaseFromTemplate(this.template, this.outputPath, this.resolvedParams)
-        : this.plugin.templateFileManager.createBaseFromTemplate(this.template, this.outputPath, this.resolvedParams));
+        ? this.plugin.templateFileManager.writeBaseFromTemplate(this.template, this.outputPath, this.values)
+        : this.plugin.templateFileManager.createBaseFromTemplate(this.template, this.outputPath, this.values));
 
       new Notice(`${overwrite ? 'Overwrote' : 'Created'} ${this.outputPath}.base`);
       this.close();

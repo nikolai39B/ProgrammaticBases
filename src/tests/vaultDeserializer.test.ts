@@ -152,23 +152,22 @@ describe('VaultDeserializer.deserialize', () => {
       .rejects.toThrow('Component not found: "missing"');
   });
 
-  it('unwraps content: from wrapper-format files', async () => {
+  it('strips pb-metadata and returns remaining top-level keys', async () => {
     const app = makeApp({
-      'template.yaml': 'pb-metadata:\n  params: {}\npb-content:\n  name: hello\n  value: 42',
+      'template.yaml': 'pb-metadata:\n  params: {}\nname: hello\nvalue: 42',
     });
     const deserializer = new VaultDeserializer(app, new Map(), '');
     const result = await deserializer.deserialize('template.yaml');
     expect(result).toEqual({ name: 'hello', value: 42 });
   });
 
-  it('strips metadata: from wrapper-format component files resolved via !sub', async () => {
+  it('strips pb-metadata from component files resolved via !sub', async () => {
     const app = makeApp({
       'base.yaml': 'filter: !sub comp',
-      'components/comp.yaml': 'pb-metadata:\n  params:\n    x:\n      type: string\npb-content:\n  operator: and',
+      'components/comp.yaml': 'pb-metadata:\n  params:\n    x:\n      type: string\noperator: and',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
     const result = await deserializer.deserialize('base.yaml') as Record<string, unknown>;
-    // metadata: should be stripped; only content: substituted
     expect(result.filter).toEqual({ operator: 'and' });
   });
 });
@@ -312,7 +311,7 @@ describe('VaultDeserializer.harvestParams', () => {
   it('harvests params from a directly referenced vault component', async () => {
     const app = makeApp({
       'components/comp.yaml':
-        'pb-metadata:\n  params:\n    taskLocation:\n      type: folder\npb-content:\n  type: text',
+        'pb-metadata:\n  params:\n    taskLocation:\n      type: folder\ntype: text',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
     const result = await deserializer.harvestParams('filter: !sub comp', 'test');
@@ -324,9 +323,9 @@ describe('VaultDeserializer.harvestParams', () => {
   it('harvests params from nested components and builds correct source paths', async () => {
     const app = makeApp({
       'components/outer.yaml':
-        'pb-metadata:\n  params: {}\npb-content:\n  inner: !sub inner',
+        'pb-metadata:\n  params: {}\ninner: !sub inner',
       'components/inner.yaml':
-        'pb-metadata:\n  params:\n    x:\n      type: string\npb-content:\n  value: 1',
+        'pb-metadata:\n  params:\n    x:\n      type: string\nvalue: 1',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
     const result = await deserializer.harvestParams('thing: !sub outer', 'test');
@@ -339,9 +338,9 @@ describe('VaultDeserializer.harvestParams', () => {
   it('merges same-named params from multiple components, keeping first spec', async () => {
     const app = makeApp({
       'components/a.yaml':
-        'pb-metadata:\n  params:\n    loc:\n      type: folder\npb-content:\n  v: 1',
+        'pb-metadata:\n  params:\n    loc:\n      type: folder\nv: 1',
       'components/b.yaml':
-        'pb-metadata:\n  params:\n    loc:\n      type: string\npb-content:\n  v: 2',
+        'pb-metadata:\n  params:\n    loc:\n      type: string\nv: 2',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
     const result = await deserializer.harvestParams('x: !sub a\ny: !sub b', 'test');

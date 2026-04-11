@@ -151,18 +151,17 @@ function resolveRef(
 }
 
 /**
- * Extracts the `content:` value from a raw parsed YAML object if the
- * wrapper format is in use (`metadata:` + `content:` keys present).
- * Otherwise returns the object as-is (legacy format without wrapper).
+ * Strips `pb-metadata` from the top-level parsed object, leaving only the
+ * actual base/component content. If `pb-metadata` is not present, the object
+ * is returned as-is (files with no metadata key are still valid).
  */
 function unwrapContent(raw: unknown): unknown {
-  if (
-    raw !== null &&
-    typeof raw === 'object' &&
-    !Array.isArray(raw) &&
-    'pb-content' in (raw as Record<string, unknown>)
-  ) {
-    return (raw as Record<string, unknown>)['pb-content'];
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    if ('pb-metadata' in obj) {
+      const { 'pb-metadata': _, ...rest } = obj;
+      return rest;
+    }
   }
   return raw;
 }

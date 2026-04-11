@@ -21,10 +21,9 @@ import { ViewRegistry } from 'views/viewRegistry';
  * `PluginTemplateSource` (qualified `"sourceName:templateName"` ref registered
  * by an external plugin).
  *
- * **Template file format** — two variants are supported:
- * - *Wrapper format*: top-level keys `pb-metadata` and `pb-content`. `pb-metadata.params`
- *   declares typed parameters; `pb-content` holds the actual base YAML.
- * - *Legacy format*: the whole file is treated as the base YAML (no wrapper).
+ * **Template file format**: `pb-metadata` (optional) at the top level declares typed
+ * parameters in `pb-metadata.params`. All other top-level keys are the base YAML content.
+ * Files with no `pb-metadata` key are also valid (treated as plain base YAML).
  *
  * **Two-pass loading:**
  * - Pass 1 (`readParamSpecsFromTemplate`): resolves `!sub` only, harvests
@@ -161,9 +160,8 @@ export class TemplateFileManager {
     let raw: unknown;
     if (source instanceof VaultTemplateSource) {
       try {
-        // contentStr is the original vault text (wrapper or legacy). The deserializer
-        // applies the full schema and calls unwrapContent to strip pb-content after parsing,
-        // so custom tags inside pb-content are evaluated correctly.
+        // contentStr is the original vault text. The deserializer applies the full schema
+        // and calls unwrapContent to strip pb-metadata after parsing.
         if (contentStr !== null) {
           raw = await deserializer.deserializeContent(contentStr, id);
         } else {
@@ -201,7 +199,7 @@ export class TemplateFileManager {
 
   /**
    * Reads the raw text of a template source and pre-parses it with a permissive
-   * schema to detect the `pb-metadata` / `pb-content` wrapper format.
+   * schema to safely read `pb-metadata.params` without evaluating custom tags.
    *
    * Returns three values consumed by the two public passes:
    * - `rawOuter`: the top-level parsed object (noop tags replaced with `null`),
@@ -212,8 +210,7 @@ export class TemplateFileManager {
    * - `id`: a stable identifier used for circular-reference detection.
    *
    * The permissive noop schema is necessary because `!sub`/`!exp`/`!fnc` tags
-   * inside `pb-content` would otherwise throw unknown-tag errors before we even
-   * know whether the file uses the wrapper format.
+   * in the content would otherwise throw unknown-tag errors at this stage.
    *
    * @param source - The template source to read.
    * @returns `{ rawOuter, contentStr, id }` — `contentStr` is `null` if the file does not exist.

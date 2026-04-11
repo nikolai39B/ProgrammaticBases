@@ -95,9 +95,9 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       const file = { path: 'Templates/board.yaml' };
       app.vault.getFileByPath.mockReturnValue(file);
-      const vaultText = 'pb-content:\n  views: []';
+      const vaultText = 'views: []';
       app.vault.read.mockResolvedValue(vaultText);
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': { views: [] } });
+      vi.mocked(yaml.load).mockReturnValue({ views: [] });
       const { deserializeContent } = mockDeserializer();
       mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -110,7 +110,7 @@ describe('TemplateFileManager', () => {
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('name: hello');
       const raw = { views: [{ type: 'table' }] };
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': raw });
+      vi.mocked(yaml.load).mockReturnValue(raw);
       mockDeserializer(raw);
       mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -122,7 +122,7 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       const { builderInstance } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -136,7 +136,7 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       vi.mocked(VaultDeserializer).mockImplementation(function () {
         return {
           deserialize: vi.fn().mockRejectedValue(new Error('File not found: Templates/board.yaml')),
@@ -154,7 +154,7 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       vi.mocked(VaultDeserializer).mockImplementation(function () {
         return {
           deserialize: vi.fn().mockRejectedValue(new Error('YAML parse error')),
@@ -231,7 +231,7 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -246,7 +246,7 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       const { builderInstance } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -261,7 +261,7 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       const { builderInstance } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -278,7 +278,7 @@ describe('TemplateFileManager', () => {
       const { manager, fileManager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       const { builtConfig } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -293,7 +293,7 @@ describe('TemplateFileManager', () => {
       const { manager, fileManager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       const { builtConfig } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -321,7 +321,7 @@ describe('TemplateFileManager', () => {
       app.vault.read.mockResolvedValue('');
       vi.mocked(yaml.load).mockReturnValue({
         'pb-metadata': { params: { taskLocation: { type: 'folder', label: 'Task folder' } } },
-        'pb-content': { views: [] },
+        views: [],
       });
       mockDeserializer(); // harvestParams returns {}
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -334,10 +334,9 @@ describe('TemplateFileManager', () => {
     it('merges template-level and component-level params', async () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
-      app.vault.read.mockResolvedValue('pb-metadata:\n  params:\n    x:\n      type: string\npb-content: {}');
+      app.vault.read.mockResolvedValue('pb-metadata:\n  params:\n    x:\n      type: string');
       vi.mocked(yaml.load).mockReturnValue({
         'pb-metadata': { params: { x: { type: 'string' } } },
-        'pb-content': {},
       });
       // Component contributes a second param
       const harvestParams = vi.fn().mockResolvedValue({
@@ -372,7 +371,7 @@ describe('TemplateFileManager', () => {
       const { manager, app } = makeSetup();
       app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
       app.vault.read.mockResolvedValue('');
-      vi.mocked(yaml.load).mockReturnValue({ 'pb-content': {} });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
