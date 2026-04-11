@@ -33,26 +33,18 @@ All major implementation work from the original plan is complete. Remaining work
 ## Next steps
 
 ### 1. Interactive testing
-- Create a base from a vault template → verify `pb-metadata.template` is written with correct vault-relative path
-- Create a base from a plugin-registered template → verify `pb-metadata.template` written as `"source:name"`
-- Run "Update base from template" → confirm modal shows correct file name + template path, file is overwritten correctly
-- Update on a base with no `pb-metadata` → Notice fires, no modal
-- Update on a base whose template file has been deleted → clear error Notice fires
+- Test `!exp` param flowing into a base field (done: `file.name.displayName` in dashboard)
+- Test `!fnc` tag with a function body
+- Test nested params: component with `pb-metadata.params` → verify param appears in modal with correct source path
+- Test "Update base from template" re-applies stored params without re-prompting
 
-### 2. Update `createBaseFromTemplate.test.ts`
-The existing tests mock `VaultDeserializer` and `BaseConfig` directly — those now live inside `TemplateFileManager`. Also has a `makeVaultTemplate` helper that constructs the old `TemplateOption` shape.
-- Replace `VaultDeserializer`/`BaseConfig` mocks with a `templateFileManager` mock on the plugin instance
-- Replace `makeVaultTemplate` (old `TemplateOption`) with `new VaultTemplateSource(file)`
-- Update all `getSuggestions` / `renderSuggestion` / `onChooseSuggestion` / `create` tests
+### 2. Modal UX improvements
+- **Merge output location + params into one modal** — currently two sequential modals (params → output path); combine into a single modal with the output path field at the bottom
+- **Output path field: add FolderSuggest** — currently a plain text input; add folder suggestions like the existing folder picker in settings
+- **Fix param source display** — "Sources:" description and Split button need UX review; verify split mode writes correct per-source keys and values flow through correctly on deserialization
 
-### 3. New test files needed
-- `src/tests/templateSource.test.ts` — `VaultTemplateSource` (file constructor, path+app constructor with lazy resolution, `toRef`), `PluginTemplateSource`, `parseTemplateRef`
-- `src/tests/templateFileManager.test.ts` — vault template path, plugin template path, metadata stamping, error cases (unknown source, missing template, missing vault file)
-- `src/tests/updateBaseFromTemplate.test.ts` — guard cases (no active file, wrong extension, missing metadata), modal behaviour, successful update, error handling
-
-### 4. Improve missing-template error message
-`TemplateFileManager` currently surfaces `VaultDeserializer`'s raw `File not found: ${path}`. Wrap it with a clearer message:
-> `Template file not found: "${path}". If you moved your bases folder, update the path in pb-metadata.template.`
+### 3. `task-base` integration (deferred)
+See "What Needs to Happen in `task-base`" section below.
 
 ---
 

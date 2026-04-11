@@ -160,9 +160,9 @@ function unwrapContent(raw: unknown): unknown {
     raw !== null &&
     typeof raw === 'object' &&
     !Array.isArray(raw) &&
-    'content' in (raw as Record<string, unknown>)
+    'pb-content' in (raw as Record<string, unknown>)
   ) {
-    return (raw as Record<string, unknown>)['content'];
+    return (raw as Record<string, unknown>)['pb-content'];
   }
   return raw;
 }
@@ -299,7 +299,7 @@ async function harvestResolved(
   const safeSchema = yaml.CORE_SCHEMA.extend([noopTag('!sub'), noopTag('!exp'), noopTag('!fnc')]);
   const rawOuter = yaml.load(content, { schema: safeSchema }) as Record<string, unknown> | null;
   if (rawOuter && typeof rawOuter === 'object' && !Array.isArray(rawOuter)) {
-    const metaRaw = (rawOuter as Record<string, unknown>)['metadata'];
+    const metaRaw = (rawOuter as Record<string, unknown>)['pb-metadata'];
     if (metaRaw && typeof metaRaw === 'object' && !Array.isArray(metaRaw)) {
       const paramsRaw = (metaRaw as Record<string, unknown>)['params'];
       const specs: ParamSpecs = parseParamSpecs(paramsRaw);
