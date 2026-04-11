@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: ProgrammaticBasesSettings = {
 }
 
 /** Suggests vault folders as the user types into an input. */
-class FolderSuggest extends AbstractInputSuggest<TFolder> {
+export class FolderSuggest extends AbstractInputSuggest<TFolder> {
   constructor(app: App, private inputEl: HTMLInputElement) {
     super(app, inputEl);
   }

@@ -27,9 +27,11 @@ export function updateBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
         return;
       }
 
+      const storedParams = metaRaw ? (BaseMetadataUtils.deserialize(metaRaw).params ?? {}) : {};
+
       new ConfirmUpdateModal(plugin.app, activeFile.name, templatePath, async () => {
         try {
-          await plugin.templateFileManager.writeBaseFromTemplate(parseTemplateRef(templatePath, plugin.app), activeFile.path);
+          await plugin.templateFileManager.writeBaseFromTemplate(parseTemplateRef(templatePath, plugin.app), activeFile.path, storedParams);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           new Notice(`Failed to update base: ${msg}`, 0);

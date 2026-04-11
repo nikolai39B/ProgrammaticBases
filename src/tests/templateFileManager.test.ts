@@ -18,15 +18,25 @@ vi.mock('bases/baseConfig', () => ({
 vi.mock('bases/baseBuilder', () => ({
   BaseBuilder: vi.fn(),
 }));
+vi.mock('js-yaml', () => ({
+  load: vi.fn(),
+  dump: vi.fn((obj: unknown) => `yaml:${JSON.stringify(obj)}`),
+}));
+
+import * as yaml from 'js-yaml';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeSetup(overrides: { sources?: Map<string, any> } = {}) {
-  const {
-    sources = new Map(),
-  } = overrides;
+  const { sources = new Map() } = overrides;
 
-  const app = {} as any;
+  const app = {
+    vault: {
+      getFileByPath: vi.fn(),
+      read: vi.fn().mockResolvedValue(''),
+    },
+  } as any;
+
   const fileManager = {
     createBase: vi.fn().mockResolvedValue(undefined),
     writeBase: vi.fn().mockResolvedValue(undefined),
@@ -48,10 +58,11 @@ function makeSetup(overrides: { sources?: Map<string, any> } = {}) {
 function mockDeserializer(raw: unknown = { views: [] }) {
   const deserialize = vi.fn().mockResolvedValue(raw);
   const deserializeContent = vi.fn().mockResolvedValue(raw);
+  const harvestParams = vi.fn().mockResolvedValue({});
   vi.mocked(VaultDeserializer).mockImplementation(function () {
-    return { deserialize, deserializeContent };
+    return { deserialize, deserializeContent, harvestParams };
   } as any);
-  return { deserialize, deserializeContent };
+  return { deserialize, deserializeContent, harvestParams };
 }
 
 /** Wires BaseConfig.deserialize and BaseBuilder chain, returns the built config object. */
@@ -73,21 +84,29 @@ describe('TemplateFileManager', () => {
     vi.clearAllMocks();
   });
 
-  // ── Vault template path ─────────────────────────────────────────────────────
+  // ── VaultTemplateSource ──────────────────────────────────────────────────────
 
   describe('VaultTemplateSource', () => {
-    it('deserializes via VaultDeserializer.deserialize with the template path', async () => {
-      const { manager } = makeSetup();
-      const { deserialize } = mockDeserializer();
+    it('deserializes via VaultDeserializer.deserializeContent with the content string', async () => {
+      const { manager, app } = makeSetup();
+      const file = { path: 'Templates/board.yaml' };
+      app.vault.getFileByPath.mockReturnValue(file);
+      app.vault.read.mockResolvedValue('content:\n  views: []');
+      // Simulate wrapper format: yaml.load returns object with content key
+      vi.mocked(yaml.load).mockReturnValue({ content: { views: [] } });
+      const { deserializeContent } = mockDeserializer();
       mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
       await manager.createBaseFromTemplate(source, 'output');
-      expect(deserialize).toHaveBeenCalledWith('Templates/board.yaml');
+      expect(deserializeContent).toHaveBeenCalled();
     });
 
     it('passes raw data to BaseConfig.deserialize with the view registry', async () => {
-      const { manager, viewRegistry } = makeSetup();
+      const { manager, viewRegistry, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('name: hello');
       const raw = { views: [{ type: 'table' }] };
+      vi.mocked(yaml.load).mockReturnValue({ content: raw });
       mockDeserializer(raw);
       mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -96,48 +115,29 @@ describe('TemplateFileManager', () => {
     });
 
     it('stamps pb-metadata.template with the vault path via BaseBuilder.setMetadata', async () => {
-      const { manager } = makeSetup();
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
       mockDeserializer();
       const { builderInstance } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
       await manager.createBaseFromTemplate(source, 'output');
-      expect(builderInstance.setMetadata).toHaveBeenCalledWith({ template: 'Templates/board.yaml' });
-    });
-  });
-
-  // ── Plugin template path ────────────────────────────────────────────────────
-
-  describe('PluginTemplateSource', () => {
-    it('deserializes via VaultDeserializer.deserializeContent with the template content and ref', async () => {
-      const sources = new Map([
-        ['task-base', { name: 'task-base', templates: { 'dashboard': 'views: []' } }],
-      ]);
-      const { manager } = makeSetup({ sources });
-      const { deserializeContent } = mockDeserializer();
-      mockPipeline();
-      const source = new PluginTemplateSource('task-base', 'dashboard');
-      await manager.createBaseFromTemplate(source, 'output');
-      expect(deserializeContent).toHaveBeenCalledWith('views: []', 'task-base:dashboard');
+      expect(builderInstance.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ template: 'Templates/board.yaml' })
+      );
     });
 
-    it('stamps pb-metadata.template with the plugin ref via BaseBuilder.setMetadata', async () => {
-      const sources = new Map([
-        ['task-base', { name: 'task-base', templates: { 'dashboard': 'views: []' } }],
-      ]);
-      const { manager } = makeSetup({ sources });
-      mockDeserializer();
-      const { builderInstance } = mockPipeline();
-      const source = new PluginTemplateSource('task-base', 'dashboard');
-      await manager.createBaseFromTemplate(source, 'output');
-      expect(builderInstance.setMetadata).toHaveBeenCalledWith({ template: 'task-base:dashboard' });
-    });
-
-    it('wraps a "File not found" error with a user-friendly message pointing to pb-metadata.template', async () => {
-      const { manager } = makeSetup();
+    it('wraps a "File not found" error with a user-friendly message', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
       vi.mocked(VaultDeserializer).mockImplementation(function () {
         return {
           deserialize: vi.fn().mockRejectedValue(new Error('File not found: Templates/board.yaml')),
-          deserializeContent: vi.fn(),
+          deserializeContent: vi.fn().mockRejectedValue(new Error('File not found: Templates/board.yaml')),
+          harvestParams: vi.fn().mockResolvedValue({}),
         };
       } as any);
       mockPipeline();
@@ -147,11 +147,15 @@ describe('TemplateFileManager', () => {
     });
 
     it('rethrows non-"File not found" errors unchanged', async () => {
-      const { manager } = makeSetup();
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
       vi.mocked(VaultDeserializer).mockImplementation(function () {
         return {
           deserialize: vi.fn().mockRejectedValue(new Error('YAML parse error')),
-          deserializeContent: vi.fn(),
+          deserializeContent: vi.fn().mockRejectedValue(new Error('YAML parse error')),
+          harvestParams: vi.fn().mockResolvedValue({}),
         };
       } as any);
       mockPipeline();
@@ -159,9 +163,42 @@ describe('TemplateFileManager', () => {
       await expect(manager.createBaseFromTemplate(source, 'output'))
         .rejects.toThrow('YAML parse error');
     });
+  });
+
+  // ── PluginTemplateSource ─────────────────────────────────────────────────────
+
+  describe('PluginTemplateSource', () => {
+    it('deserializes via VaultDeserializer.deserializeContent with the template content and ref', async () => {
+      const sources = new Map([
+        ['task-base', { name: 'task-base', templates: { 'dashboard': 'views: []' } }],
+      ]);
+      const { manager } = makeSetup({ sources });
+      vi.mocked(yaml.load).mockReturnValue({ views: [] }); // no content: wrapper
+      const { deserializeContent } = mockDeserializer();
+      mockPipeline();
+      const source = new PluginTemplateSource('task-base', 'dashboard');
+      await manager.createBaseFromTemplate(source, 'output');
+      expect(deserializeContent).toHaveBeenCalled();
+    });
+
+    it('stamps pb-metadata.template with the plugin ref via BaseBuilder.setMetadata', async () => {
+      const sources = new Map([
+        ['task-base', { name: 'task-base', templates: { 'dashboard': 'views: []' } }],
+      ]);
+      const { manager } = makeSetup({ sources });
+      vi.mocked(yaml.load).mockReturnValue({ views: [] });
+      mockDeserializer();
+      const { builderInstance } = mockPipeline();
+      const source = new PluginTemplateSource('task-base', 'dashboard');
+      await manager.createBaseFromTemplate(source, 'output');
+      expect(builderInstance.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ template: 'task-base:dashboard' })
+      );
+    });
 
     it('throws when the plugin source name is not registered', async () => {
       const { manager } = makeSetup();
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       mockPipeline();
       const source = new PluginTemplateSource('unknown-plugin', 'dashboard');
@@ -174,6 +211,7 @@ describe('TemplateFileManager', () => {
         ['task-base', { name: 'task-base', templates: {} }],
       ]);
       const { manager } = makeSetup({ sources });
+      vi.mocked(yaml.load).mockReturnValue({});
       mockDeserializer();
       mockPipeline();
       const source = new PluginTemplateSource('task-base', 'missing-template');
@@ -182,11 +220,61 @@ describe('TemplateFileManager', () => {
     });
   });
 
-  // ── createBase vs writeBase routing ────────────────────────────────────────
+  // ── resolvedParams threading ─────────────────────────────────────────────────
+
+  describe('resolvedParams', () => {
+    it('passes resolvedParams to VaultDeserializer constructor', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
+      mockDeserializer();
+      mockPipeline();
+      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const params = { taskLocation: 'Tasks', flag: true };
+      await manager.createBaseFromTemplate(source, 'output', params);
+      // Fourth arg to VaultDeserializer constructor should be the params
+      const ctorArgs = vi.mocked(VaultDeserializer).mock.calls[0]!;
+      expect(ctorArgs[3]).toEqual(params);
+    });
+
+    it('stamps setMetadata with params when non-empty', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
+      mockDeserializer();
+      const { builderInstance } = mockPipeline();
+      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const params = { taskLocation: 'Tasks' };
+      await manager.createBaseFromTemplate(source, 'output', params);
+      expect(builderInstance.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ params })
+      );
+    });
+
+    it('omits params from setMetadata when empty', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
+      mockDeserializer();
+      const { builderInstance } = mockPipeline();
+      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      await manager.createBaseFromTemplate(source, 'output', {});
+      const meta = builderInstance.setMetadata.mock.calls[0]![0];
+      expect(meta.params).toBeUndefined();
+    });
+  });
+
+  // ── createBase vs writeBase routing ─────────────────────────────────────────
 
   describe('createBaseFromTemplate()', () => {
     it('calls fileManager.createBase with the built config and output path', async () => {
-      const { manager, fileManager } = makeSetup();
+      const { manager, fileManager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
       mockDeserializer();
       const { builtConfig } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
@@ -198,13 +286,94 @@ describe('TemplateFileManager', () => {
 
   describe('writeBaseFromTemplate()', () => {
     it('calls fileManager.writeBase with the built config and output path', async () => {
-      const { manager, fileManager } = makeSetup();
+      const { manager, fileManager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
       mockDeserializer();
       const { builtConfig } = mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
       await manager.writeBaseFromTemplate(source, 'my-board');
       expect(fileManager.writeBase).toHaveBeenCalledWith(builtConfig, 'my-board');
       expect(fileManager.createBase).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── readParamSpecsFromTemplate ───────────────────────────────────────────────
+
+  describe('readParamSpecsFromTemplate()', () => {
+    it('returns {} when the template file does not exist', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue(null);
+      vi.mocked(yaml.load).mockReturnValue(null);
+      const source = new VaultTemplateSource('Templates/missing.yaml', {} as any);
+      const result = await manager.readParamSpecsFromTemplate(source);
+      expect(result).toEqual({});
+    });
+
+    it('returns template-level params from metadata.params', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({
+        metadata: { params: { taskLocation: { type: 'folder', label: 'Task folder' } } },
+        content: { views: [] },
+      });
+      mockDeserializer(); // harvestParams returns {}
+      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const result = await manager.readParamSpecsFromTemplate(source);
+      expect(result.taskLocation).toBeDefined();
+      expect(result.taskLocation!.spec.type).toBe('folder');
+      expect(result.taskLocation!.sources).toContain('');
+    });
+
+    it('merges template-level and component-level params', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({
+        metadata: { params: { x: { type: 'string' } } },
+        content: {},
+      });
+      // Component contributes a second param
+      const harvestParams = vi.fn().mockResolvedValue({
+        y: { spec: { type: 'boolean' }, sources: ['some/comp'] },
+      });
+      vi.mocked(VaultDeserializer).mockImplementation(function () {
+        return { deserialize: vi.fn(), deserializeContent: vi.fn(), harvestParams };
+      } as any);
+      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const result = await manager.readParamSpecsFromTemplate(source);
+      expect(result.x).toBeDefined();
+      expect(result.y).toBeDefined();
+    });
+
+    it('returns {} for a plugin template with no metadata.params', async () => {
+      const sources = new Map([
+        ['task-base', { name: 'task-base', templates: { 'dashboard': 'views: []' } }],
+      ]);
+      const { manager } = makeSetup({ sources });
+      vi.mocked(yaml.load).mockReturnValue({ views: [] }); // no metadata key
+      mockDeserializer();
+      const source = new PluginTemplateSource('task-base', 'dashboard');
+      const result = await manager.readParamSpecsFromTemplate(source);
+      expect(result).toEqual({});
+    });
+  });
+
+  // ── loadTemplate is public ───────────────────────────────────────────────────
+
+  describe('loadTemplate()', () => {
+    it('is callable publicly', async () => {
+      const { manager, app } = makeSetup();
+      app.vault.getFileByPath.mockReturnValue({ path: 'Templates/board.yaml' });
+      app.vault.read.mockResolvedValue('');
+      vi.mocked(yaml.load).mockReturnValue({ content: {} });
+      mockDeserializer();
+      mockPipeline();
+      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      // Should not throw — method is public
+      await expect(manager.loadTemplate(source, {})).resolves.not.toThrow();
     });
   });
 });

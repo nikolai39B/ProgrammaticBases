@@ -79,6 +79,14 @@ export class Setting {
     cb(text);
     return this;
   }
+  addToggle(cb: (toggle: any) => any) {
+    const toggle = {
+      setValue(_v: boolean) { return this; },
+      onChange(_fn: (v: boolean) => void) { return this; },
+    };
+    cb(toggle);
+    return this;
+  }
   addButton(cb: (btn: any) => any) {
     const btn = {
       setButtonText(_t: string) { return this; },

@@ -1,6 +1,13 @@
 import { App, Command, Modal, Notice, Setting, SuggestModal, TFile, TFolder, normalizePath } from 'obsidian';
 import ProgrammaticBases from 'main';
 import { PluginTemplateSource, TemplateSource, VaultTemplateSource } from 'bases/templateSource';
+import { FolderSuggest } from 'settings';
+import {
+  HarvestedParam,
+  HarvestedParams,
+  ParamValue,
+  ResolvedParams,
+} from 'bases/templateParams';
 
 /**
  * Returns the human-readable display name for a template source.
@@ -49,7 +56,8 @@ export function createBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
 /**
  * Step 1 modal: lets the user search and select a template from all available
  * sources (vault folder and plugin-registered templates).  On selection it
- * advances to {@link OutputPathModal}.
+ * advances to {@link ParamCollectionModal} (if the template declares params)
+ * or {@link OutputPathModal} (if not).
  */
 export class TemplatePicker extends SuggestModal<TemplateSource> {
   constructor(app: App, private plugin: ProgrammaticBases) {
@@ -100,12 +108,170 @@ export class TemplatePicker extends SuggestModal<TemplateSource> {
   }
 
   /**
-   * Opens the output path modal for the chosen template.
+   * If the template declares params, opens {@link ParamCollectionModal} first.
+   * Otherwise advances directly to {@link OutputPathModal}.
    *
    * @param source - The template source the user selected.
    */
-  onChooseSuggestion(source: TemplateSource) {
-    new OutputPathModal(this.app, this.plugin, source).open();
+  async onChooseSuggestion(source: TemplateSource) {
+    const harvested = await this.plugin.templateFileManager.readParamSpecsFromTemplate(source);
+    if (Object.keys(harvested).length > 0) {
+      new ParamCollectionModal(this.app, source, harvested, (resolvedParams) => {
+        new OutputPathModal(this.app, this.plugin, source, resolvedParams).open();
+      }).open();
+    } else {
+      new OutputPathModal(this.app, this.plugin, source, {}).open();
+    }
+  }
+}
+
+// ── Step 1.5 (conditional): collect params ───────────────────────────────────
+
+/**
+ * Optional step between template selection and path confirmation.
+ * Shown only when the selected template declares at least one param.
+ * Collects user values for each param, then advances to {@link OutputPathModal}.
+ */
+export class ParamCollectionModal extends Modal {
+  private values: ResolvedParams = {};
+
+  /**
+   * @param app - The Obsidian app instance.
+   * @param source - The template source selected in the previous step.
+   * @param harvested - All params discovered across the template and its components.
+   * @param onSubmit - Called with the flat {@link ResolvedParams} map when the user continues.
+   */
+  constructor(
+    app: App,
+    _source: TemplateSource,
+    private harvested: HarvestedParams,
+    private onSubmit: (resolvedParams: ResolvedParams) => void,
+  ) {
+    super(app);
+
+    // Pre-fill defaults and fan out to all source-scoped keys
+    for (const [name, entry] of Object.entries(harvested)) {
+      const defaultVal = entry.spec.default ?? (entry.spec.type === 'boolean' ? false : '');
+      this.setParamValue(name, entry, defaultVal as ParamValue);
+    }
+  }
+
+  onOpen() {
+    this.titleEl.setText('Template parameters');
+
+    for (const [name, entry] of Object.entries(this.harvested)) {
+      this.renderParamSetting(name, entry);
+    }
+
+    new Setting(this.contentEl)
+      .addButton(btn => btn
+        .setButtonText('Continue')
+        .setCta()
+        .onClick(() => {
+          this.close();
+          this.onSubmit(this.values);
+        }))
+      .addButton(btn => btn
+        .setButtonText('Cancel')
+        .onClick(() => this.close()));
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+
+  /**
+   * Renders a single param as an Obsidian Setting row with the appropriate control.
+   * Multi-source params include a "Split" button to allow per-source overrides.
+   */
+  private renderParamSetting(name: string, entry: HarvestedParam, splitSourcePath?: string) {
+    const isRoot = splitSourcePath === undefined;
+    const label = isRoot ? (entry.spec.label ?? name) : splitSourcePath;
+    const currentValue = isRoot
+      ? (this.values[name] ?? '')
+      : (this.values[`${splitSourcePath}>${name}`] ?? this.values[name] ?? '');
+
+    const setting = new Setting(this.contentEl).setName(label);
+
+    if (isRoot && entry.sources.length > 1) {
+      setting.setDesc(`Sources: ${entry.sources.join(', ')}`);
+    }
+
+    switch (entry.spec.type) {
+      case 'boolean':
+        setting.addToggle(toggle =>
+          toggle
+            .setValue(Boolean(currentValue))
+            .onChange(v => this.setParamValue(name, entry, v, isRoot ? undefined : splitSourcePath)));
+        break;
+
+      case 'folder':
+        setting.addText(text => {
+          new FolderSuggest(this.app, text.inputEl);
+          text
+            .setValue(String(currentValue))
+            .onChange(v => this.setParamValue(name, entry, v.trim(), isRoot ? undefined : splitSourcePath));
+        });
+        break;
+
+      case 'number':
+        setting.addText(text =>
+          text
+            .setValue(String(currentValue))
+            .onChange(v => {
+              const n = parseFloat(v);
+              if (!isNaN(n)) this.setParamValue(name, entry, n, isRoot ? undefined : splitSourcePath);
+            }));
+        break;
+
+      default: // string, date, datetime
+        setting.addText(text =>
+          text
+            .setValue(String(currentValue))
+            .onChange(v => this.setParamValue(name, entry, v, isRoot ? undefined : splitSourcePath)));
+        break;
+    }
+
+    // Show Split button for merged params (multiple sources) to allow per-source values
+    if (isRoot && entry.sources.length > 1) {
+      setting.addButton(btn =>
+        btn.setButtonText('Split').onClick(() => {
+          // Remove the merged-value setting and replace with per-source inputs
+          setting.settingEl.remove();
+          for (const src of entry.sources) {
+            this.renderParamSetting(name, entry, src);
+          }
+        }));
+    }
+  }
+
+  /**
+   * Writes a param value into `this.values`, fanning it out to all source-scoped
+   * keys when `splitSourcePath` is undefined (merged mode).
+   */
+  private setParamValue(
+    name: string,
+    entry: HarvestedParam,
+    value: ParamValue,
+    splitSourcePath?: string,
+  ) {
+    if (splitSourcePath !== undefined) {
+      // Split mode: write only the specific source-scoped key
+      this.values[`${splitSourcePath}>${name}`] = value;
+    } else {
+      // Merged mode: fan out to all source-scoped keys and the template-level key
+      for (const src of entry.sources) {
+        if (src === '') {
+          this.values[name] = value;
+        } else {
+          this.values[`${src}>${name}`] = value;
+        }
+      }
+      // Also write a plain key as a fallback for template-level declarations
+      if (!entry.sources.includes('')) {
+        this.values[name] = value;
+      }
+    }
   }
 }
 
@@ -124,8 +290,14 @@ export class OutputPathModal extends Modal {
    * @param app - The Obsidian app instance.
    * @param plugin - The loaded `ProgrammaticBases` plugin instance.
    * @param template - The template source selected in the previous step.
+   * @param resolvedParams - User-supplied param values from {@link ParamCollectionModal}.
    */
-  constructor(app: App, private plugin: ProgrammaticBases, private template: TemplateSource) {
+  constructor(
+    app: App,
+    private plugin: ProgrammaticBases,
+    private template: TemplateSource,
+    private resolvedParams: ResolvedParams,
+  ) {
     super(app);
 
     // Default output path: folder of the active file + template name (or just the name if no file is open)
@@ -185,8 +357,8 @@ export class OutputPathModal extends Modal {
       }
 
       await (overwrite
-        ? this.plugin.templateFileManager.writeBaseFromTemplate(this.template, this.outputPath)
-        : this.plugin.templateFileManager.createBaseFromTemplate(this.template, this.outputPath));
+        ? this.plugin.templateFileManager.writeBaseFromTemplate(this.template, this.outputPath, this.resolvedParams)
+        : this.plugin.templateFileManager.createBaseFromTemplate(this.template, this.outputPath, this.resolvedParams));
 
       new Notice(`${overwrite ? 'Overwrote' : 'Created'} ${this.outputPath}.base`);
       this.close();
