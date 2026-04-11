@@ -2,6 +2,7 @@
 import DebugUtils from 'debug';
 import ProgrammaticBases from 'main';
 import { BaseBuilder } from 'bases/baseBuilder';
+import { BaseConfig } from 'bases/baseConfig';
 import { Property } from 'primitives/property';
 import { CardViewBuilder } from 'views/cardViewBuilder';
 import { TableViewBuilder } from 'views/tableViewBuilder';
@@ -51,12 +52,12 @@ export class ProgrammaticBasesAPI {
   }
 
   //-- METHODS
-  get createBase(): typeof ProgrammaticBases.instance.fileManager.createBase {
-    return ProgrammaticBases.instance.fileManager.createBase;
-  }
-  get writeBase(): typeof ProgrammaticBases.instance.fileManager.writeBase {
-    return ProgrammaticBases.instance.fileManager.writeBase;
-  }
+  readBase = (filePath: string) =>
+    ProgrammaticBases.instance.fileManager.readBase(filePath);
+  createBase = (config: BaseConfig, filePath: string) =>
+    ProgrammaticBases.instance.fileManager.createBase(config, filePath);
+  writeBase = (config: BaseConfig, filePath: string) =>
+    ProgrammaticBases.instance.fileManager.writeBase(config, filePath);
 
   //-- DEBUG
   debug = DebugUtils;

@@ -2,6 +2,7 @@ import { Plugin } from 'obsidian';
 
 import { ProgrammaticBasesAPI } from 'api';
 import { createBaseFromTemplateCommand } from 'commands/createBaseFromTemplate';
+import { updateBaseFromTemplateCommand } from 'commands/updateBaseFromTemplate';
 import { ExternalSource, DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
 
 import { CardViewInstaller } from 'views/cardViewInstaller';
@@ -11,6 +12,7 @@ import { ViewTypeInstaller } from 'views/viewTypeInstaller';
 import { ViewRegistry } from 'views/viewRegistry';
 
 import { BaseFileManager } from 'fileManagement/baseFileManager';
+import { TemplateFileManager } from 'fileManagement/templateFileManager';
 
 import { PluginDependencyManager } from '../../pluginUtilsCommon/src/dependency';
 
@@ -26,6 +28,10 @@ export default class ProgrammaticBases extends Plugin {
   // File manager
   private _fileManager: BaseFileManager;
   get fileManager(): BaseFileManager { return this._fileManager; }
+
+  // Template file manager
+  private _templateFileManager: TemplateFileManager;
+  get templateFileManager(): TemplateFileManager { return this._templateFileManager; }
   
   // API
   private _api: ProgrammaticBasesAPI;
@@ -75,10 +81,18 @@ export default class ProgrammaticBases extends Plugin {
       this._viewInstallers.forEach(i => i.install(this.viewRegistry));
 
       // Create the file manager
-      this._fileManager = new BaseFileManager(this.app);
+      this._fileManager = new BaseFileManager(this.app, this._viewRegistry);
+      this._templateFileManager = new TemplateFileManager(
+        this.app,
+        this._fileManager,
+        this._viewRegistry,
+        () => this.allSources,
+        () => this.componentsFolder,
+      );
 
       // Register commands
       this.addCommand(createBaseFromTemplateCommand(this));
+      this.addCommand(updateBaseFromTemplateCommand(this));
 
       // Configure the settings
       await this.loadSettings();

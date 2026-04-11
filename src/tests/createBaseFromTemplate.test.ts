@@ -8,16 +8,9 @@ import {
   OutputPathModal,
   ConfirmOverwriteModal,
 } from '../commands/createBaseFromTemplate';
-import { VaultDeserializer } from 'fileManagement/vaultDeserializer';
-import { BaseConfig } from 'bases/baseConfig';
+import { VaultTemplateSource, PluginTemplateSource } from 'bases/templateSource';
 
 vi.mock('main', () => ({ default: class {} }));
-vi.mock('fileManagement/vaultDeserializer', () => ({
-  VaultDeserializer: vi.fn(),
-}));
-vi.mock('bases/baseConfig', () => ({
-  BaseConfig: { deserialize: vi.fn() },
-}));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,9 +28,9 @@ function makeTFolder(children: (TFile | TFolder)[] = []): TFolder {
   return folder;
 }
 
-/** Wraps a TFile in a vault TemplateOption. */
-function makeVaultTemplate(file: TFile) {
-  return { source: 'vault' as const, file };
+/** Wraps a TFile in a VaultTemplateSource. */
+function makeVaultTemplate(file: TFile): VaultTemplateSource {
+  return new VaultTemplateSource(file);
 }
 
 function makePlugin(overrides: {
@@ -64,9 +57,9 @@ function makePlugin(overrides: {
     getActiveFile: vi.fn().mockReturnValue(activeFile),
   };
 
-  const fileManager = {
-    createBase: vi.fn().mockResolvedValue(undefined),
-    writeBase: vi.fn().mockResolvedValue(undefined),
+  const templateFileManager = {
+    createBaseFromTemplate: vi.fn().mockResolvedValue(undefined),
+    writeBaseFromTemplate: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -75,24 +68,8 @@ function makePlugin(overrides: {
     allSources,
     componentsFolder: 'Templates/components',
     viewRegistry: {} as any,
-    fileManager,
+    templateFileManager,
   } as any;
-}
-
-/** Creates a mock VaultDeserializer with configurable deserialize/deserializeContent spies. */
-function mockDeserializer(result: unknown = { views: [] }) {
-  const deserialize = vi.fn().mockResolvedValue(result);
-  const deserializeContent = vi.fn().mockResolvedValue(result);
-  vi.mocked(VaultDeserializer).mockImplementation(function() {
-    return { deserialize, deserializeContent };
-  } as any);
-  return { deserialize, deserializeContent };
-}
-
-/** Wires BaseConfig.deserialize to return a mock config object. */
-function mockBaseConfig(config: unknown = {}) {
-  vi.mocked(BaseConfig.deserialize).mockReturnValue(config as BaseConfig);
-  return config as BaseConfig;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -148,7 +125,7 @@ describe('TemplatePicker', () => {
       expect(picker.getSuggestions('anything')).toEqual([]);
     });
 
-    it('returns only .yaml files from the folder as vault TemplateOptions', () => {
+    it('returns only .yaml files from the folder as VaultTemplateSources', () => {
       const yamlFile = makeTFile('template', 'yaml');
       const mdFile = makeTFile('notes', 'md');
       const folder = makeTFolder([yamlFile, mdFile, makeTFolder()]);
@@ -183,7 +160,7 @@ describe('TemplatePicker', () => {
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('')).toEqual([
         makeVaultTemplate(vaultFile),
-        { source: 'plugin', sourceName: 'my-plugin', templateName: 'dashboard', content: 'views: []' },
+        new PluginTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
 
@@ -194,7 +171,7 @@ describe('TemplatePicker', () => {
       ]);
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('')).toEqual([
-        { source: 'plugin', sourceName: 'my-plugin', templateName: 'dashboard', content: 'views: []' },
+        new PluginTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
 
@@ -205,7 +182,7 @@ describe('TemplatePicker', () => {
       ]);
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('dash')).toEqual([
-        { source: 'plugin', sourceName: 'my-plugin', templateName: 'dashboard', content: 'v: []' },
+        new PluginTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
   });
@@ -230,8 +207,6 @@ describe('OutputPathModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     plugin = makePlugin();
-    mockDeserializer();
-    mockBaseConfig();
   });
 
   // ── onClose ────────────────────────────────────────────────────────────────
@@ -268,7 +243,7 @@ describe('OutputPathModal', () => {
     });
 
     it('uses templateName as the basename for plugin templates', () => {
-      const pluginTemplate = { source: 'plugin' as const, sourceName: 'my-plugin', templateName: 'dashboard', content: '' };
+      const pluginTemplate = new PluginTemplateSource('my-plugin', 'dashboard');
       const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate);
       expect((modal as any).outputPath).toBe('dashboard');
     });
@@ -277,69 +252,48 @@ describe('OutputPathModal', () => {
   // ── create() ───────────────────────────────────────────────────────────────
 
   describe('create()', () => {
-    it('calls VaultDeserializer.deserialize with the template path for vault templates', async () => {
-      const { deserialize } = mockDeserializer();
+    it('calls templateFileManager.createBaseFromTemplate with the template and output path', async () => {
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create();
-      expect(deserialize).toHaveBeenCalledWith(templateFile.path);
+      expect(plugin.templateFileManager.createBaseFromTemplate).toHaveBeenCalledWith(template, 'my-template');
     });
 
-    it('calls VaultDeserializer.deserializeContent for plugin templates', async () => {
-      const { deserializeContent } = mockDeserializer();
-      const pluginTemplate = { source: 'plugin' as const, sourceName: 'my-plugin', templateName: 'dashboard', content: 'views: []' };
+    it('calls templateFileManager.createBaseFromTemplate for plugin templates', async () => {
+      const pluginTemplate = new PluginTemplateSource('my-plugin', 'dashboard');
       const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate);
       await (modal as any).create();
-      expect(deserializeContent).toHaveBeenCalledWith('views: []', 'my-plugin:dashboard');
+      expect(plugin.templateFileManager.createBaseFromTemplate).toHaveBeenCalledWith(pluginTemplate, 'dashboard');
     });
 
-    it('calls BaseConfig.deserialize with the raw data and view registry', async () => {
-      const raw = { views: [{ type: 'table' }] };
-      mockDeserializer(raw);
-      const modal = new OutputPathModal(plugin.app, plugin, template);
-      await (modal as any).create();
-      expect(vi.mocked(BaseConfig.deserialize)).toHaveBeenCalledWith(raw, plugin.viewRegistry);
-    });
-
-    it('calls fileManager.createBase when the output file does not exist', async () => {
-      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
-      const config = mockBaseConfig();
-      const modal = new OutputPathModal(plugin.app, plugin, template);
-      await (modal as any).create();
-      expect(plugin.fileManager.createBase).toHaveBeenCalledWith(config, 'my-template');
-    });
-
-    it('calls fileManager.writeBase and not createBase when overwrite=true', async () => {
-      const config = mockBaseConfig();
+    it('calls templateFileManager.writeBaseFromTemplate and not createBaseFromTemplate when overwrite=true', async () => {
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create(true);
-      expect(plugin.fileManager.writeBase).toHaveBeenCalledWith(config, 'my-template');
-      expect(plugin.fileManager.createBase).not.toHaveBeenCalled();
+      expect(plugin.templateFileManager.writeBaseFromTemplate).toHaveBeenCalledWith(template, 'my-template');
+      expect(plugin.templateFileManager.createBaseFromTemplate).not.toHaveBeenCalled();
     });
 
-    it('opens a ConfirmOverwriteModal and does not call createBase when file exists', async () => {
+    it('opens a ConfirmOverwriteModal and does not call createBaseFromTemplate when file exists', async () => {
       plugin.app.vault.getAbstractFileByPath.mockReturnValue({} /* existing file */);
       const openSpy = vi.spyOn(Modal.prototype, 'open');
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create(false);
       expect(openSpy).toHaveBeenCalledOnce();
-      expect(plugin.fileManager.createBase).not.toHaveBeenCalled();
+      expect(plugin.templateFileManager.createBaseFromTemplate).not.toHaveBeenCalled();
     });
 
-    it('shows a Notice containing "Created" after a successful createBase', async () => {
-      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
+    it('shows a Notice containing "Created" after a successful createBaseFromTemplate', async () => {
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Created'));
     });
 
-    it('shows a Notice containing "Overwrote" after a successful writeBase', async () => {
+    it('shows a Notice containing "Overwrote" after a successful writeBaseFromTemplate', async () => {
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create(true);
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Overwrote'));
     });
 
     it('calls close() after a successful create', async () => {
-      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
       const modal = new OutputPathModal(plugin.app, plugin, template);
       const closeSpy = vi.spyOn(modal, 'close');
       await (modal as any).create();
@@ -354,7 +308,6 @@ describe('OutputPathModal', () => {
     });
 
     it('does not append .base when outputPath already has an extension', async () => {
-      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
       const modal = new OutputPathModal(plugin.app, plugin, template);
       (modal as any).outputPath = 'my-file.base';
       await (modal as any).create();
@@ -362,30 +315,23 @@ describe('OutputPathModal', () => {
     });
 
     it('appends .base for the existence check when outputPath has no extension', async () => {
-      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
       const modal = new OutputPathModal(plugin.app, plugin, template);
       (modal as any).outputPath = 'my-file';
       await (modal as any).create();
       expect(plugin.app.vault.getAbstractFileByPath).toHaveBeenCalledWith('my-file.base');
     });
 
-    it('shows an error Notice when deserialization throws', async () => {
-      vi.mocked(VaultDeserializer).mockImplementation(function() {
-        return {
-          deserialize: vi.fn().mockRejectedValue(new Error('YAML parse error')),
-          deserializeContent: vi.fn().mockRejectedValue(new Error('YAML parse error')),
-        };
-      } as any);
+    it('shows an error Notice when templateFileManager.createBaseFromTemplate throws', async () => {
+      plugin.templateFileManager.createBaseFromTemplate.mockRejectedValue(new Error('YAML parse error'));
       const modal = new OutputPathModal(plugin.app, plugin, template);
       await (modal as any).create();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('YAML parse error'), 0);
     });
 
-    it('shows an error Notice when fileManager throws and does not rethrow', async () => {
-      plugin.app.vault.getAbstractFileByPath.mockReturnValue(null);
-      plugin.fileManager.createBase.mockRejectedValue(new Error('Disk full'));
+    it('shows an error Notice when templateFileManager.writeBaseFromTemplate throws and does not rethrow', async () => {
+      plugin.templateFileManager.writeBaseFromTemplate.mockRejectedValue(new Error('Disk full'));
       const modal = new OutputPathModal(plugin.app, plugin, template);
-      await expect((modal as any).create()).resolves.not.toThrow();
+      await expect((modal as any).create(true)).resolves.not.toThrow();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Disk full'), 0);
     });
   });

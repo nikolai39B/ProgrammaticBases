@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TFile } from 'obsidian';                              // ← resolves to __mocks__/obsidian.ts
 import { BaseFileManager } from 'fileManagement/baseFileManager';
 import { BaseConfig } from 'bases/baseConfig';
+import * as yaml from 'js-yaml';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -12,6 +13,7 @@ import { BaseConfig } from 'bases/baseConfig';
 
 vi.mock('js-yaml', () => ({
   dump: vi.fn((obj: unknown) => `yaml:${JSON.stringify(obj)}`),
+  load: vi.fn(),
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -19,8 +21,10 @@ vi.mock('js-yaml', () => ({
 function makeApp() {
   const vault = {
     getAbstractFileByPath: vi.fn(),
+    getFileByPath: vi.fn(),
     create: vi.fn().mockResolvedValue(undefined),
     modify: vi.fn().mockResolvedValue(undefined),
+    read: vi.fn().mockResolvedValue(''),
     createFolder: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -28,6 +32,10 @@ function makeApp() {
     vault,
     app: { vault } as unknown as import('obsidian').App,
   };
+}
+
+function makeViewRegistry() {
+  return { deserialize: vi.fn() } as any;
 }
 
 function makeConfig(serialized: Record<string, unknown> = { name: 'Test' }): BaseConfig {
@@ -60,14 +68,66 @@ describe('BaseFileManager', () => {
 
   let vault: ReturnType<typeof makeApp>['vault'];
   let app: ReturnType<typeof makeApp>['app'];
+  let viewRegistry: ReturnType<typeof makeViewRegistry>;
   let manager: BaseFileManager;
   let config: BaseConfig;
 
   beforeEach(() => {
     vi.clearAllMocks();
     ({ vault, app } = makeApp());
-    manager = new BaseFileManager(app);
+    viewRegistry = makeViewRegistry();
+    manager = new BaseFileManager(app, viewRegistry);
     config = makeConfig();
+  });
+
+  // ── readBase() ───────────────────────────────────────────────────────────────
+
+  describe('readBase()', () => {
+    it('throws when the file does not exist', async () => {
+      vault.getFileByPath.mockReturnValue(null);
+      await expect(manager.readBase('missing')).rejects.toThrow('File not found: missing.base');
+    });
+
+    it('reads the file content from the vault', async () => {
+      const file = makeTFile();
+      vault.getFileByPath.mockReturnValue(file);
+      vi.mocked(yaml.load).mockReturnValue({ views: [{ type: 'table' }] });
+      viewRegistry.deserialize.mockReturnValue({ type: 'table' });
+      await manager.readBase('my-base');
+      expect(vault.read).toHaveBeenCalledWith(file);
+    });
+
+    it('parses the file content with yaml.load', async () => {
+      vault.getFileByPath.mockReturnValue(makeTFile());
+      vault.read.mockResolvedValue('views:\n  - type: table');
+      vi.mocked(yaml.load).mockReturnValue({ views: [{ type: 'table' }] });
+      viewRegistry.deserialize.mockReturnValue({ type: 'table' });
+      await manager.readBase('my-base');
+      expect(yaml.load).toHaveBeenCalledWith('views:\n  - type: table');
+    });
+
+    it('deserializes via BaseConfig.deserialize with the view registry', async () => {
+      vault.getFileByPath.mockReturnValue(makeTFile());
+      const raw = { views: [{ type: 'table' }] };
+      vi.mocked(yaml.load).mockReturnValue(raw);
+      const mockView = { type: 'table' };
+      viewRegistry.deserialize.mockReturnValue(mockView);
+      const result = await manager.readBase('my-base');
+      expect(result).toBeInstanceOf(BaseConfig);
+      expect(viewRegistry.deserialize).toHaveBeenCalledWith({ type: 'table' });
+    });
+
+    it('appends .base extension when no extension is provided', async () => {
+      vault.getFileByPath.mockReturnValue(null);
+      await expect(manager.readBase('my-base')).rejects.toThrow('my-base.base');
+      expect(vault.getFileByPath).toHaveBeenCalledWith('my-base.base');
+    });
+
+    it('preserves an existing extension', async () => {
+      vault.getFileByPath.mockReturnValue(null);
+      await expect(manager.readBase('my-base.custom')).rejects.toThrow('my-base.custom');
+      expect(vault.getFileByPath).toHaveBeenCalledWith('my-base.custom');
+    });
   });
 
   // ── createBase() ─────────────────────────────────────────────────────────────
