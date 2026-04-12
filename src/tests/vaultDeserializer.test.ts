@@ -21,14 +21,14 @@ function makeApp(files: Record<string, string>): App {
 
 // ─── deserialize ──────────────────────────────────────────────────────────────
 
-describe('VaultDeserializer.deserialize', () => {
+describe('VaultDeserializer.deserializeFile', () => {
   it('deserializes a simple YAML file', async () => {
     const app = makeApp({
       'test.yaml': 'name: hello\nvalue: 42',
     });
 
     const deserializer = new VaultDeserializer(app, new Map(), '');
-    const result = await deserializer.deserialize('test.yaml');
+    const result = await deserializer.deserializeFile('test.yaml');
 
     expect(result).toEqual({ name: 'hello', value: 42 });
   });
@@ -37,7 +37,7 @@ describe('VaultDeserializer.deserialize', () => {
     const app = makeApp({});
     const deserializer = new VaultDeserializer(app, new Map(), '');
 
-    await expect(deserializer.deserialize('missing.yaml'))
+    await expect(deserializer.deserializeFile('missing.yaml'))
       .rejects.toThrow('File not found: missing.yaml');
   });
 
@@ -48,7 +48,7 @@ describe('VaultDeserializer.deserialize', () => {
     });
 
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.deserialize('base.yaml') as Record<string, unknown>;
+    const result = await deserializer.deserializeFile('base.yaml') as Record<string, unknown>;
 
     expect(result.filter).toEqual({ operator: 'and', children: [] });
   });
@@ -61,7 +61,7 @@ describe('VaultDeserializer.deserialize', () => {
     });
 
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.deserialize('base.yaml') as Record<string, unknown>;
+    const result = await deserializer.deserializeFile('base.yaml') as Record<string, unknown>;
 
     expect(result.filter).toEqual({ nested: { value: 'deep' } });
   });
@@ -74,7 +74,7 @@ describe('VaultDeserializer.deserialize', () => {
     });
 
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.deserialize('base.yaml') as Record<string, unknown>;
+    const result = await deserializer.deserializeFile('base.yaml') as Record<string, unknown>;
 
     expect(result.items).toEqual([{ value: 'first' }, { value: 'second' }]);
   });
@@ -87,7 +87,7 @@ describe('VaultDeserializer.deserialize', () => {
     });
 
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.deserialize('base.yaml') as Record<string, unknown>;
+    const result = await deserializer.deserializeFile('base.yaml') as Record<string, unknown>;
 
     expect(result).toEqual({
       a: { value: 1 },
@@ -104,7 +104,7 @@ describe('VaultDeserializer.deserialize', () => {
 
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
 
-    await expect(deserializer.deserialize('base.yaml'))
+    await expect(deserializer.deserializeFile('base.yaml'))
       .rejects.toThrow('Circular !sub reference detected: components/a_comp.yaml');
   });
 
@@ -115,7 +115,7 @@ describe('VaultDeserializer.deserialize', () => {
 
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
 
-    await expect(deserializer.deserialize('base.yaml'))
+    await expect(deserializer.deserializeFile('base.yaml'))
       .rejects.toThrow('Invalid !sub path: ../secret.yaml');
   });
 
@@ -125,7 +125,7 @@ describe('VaultDeserializer.deserialize', () => {
     });
 
     const deserializer = new VaultDeserializer(app, new Map(), '');
-    const result = await deserializer.deserialize('test.yaml');
+    const result = await deserializer.deserializeFile('test.yaml');
 
     expect(result).toBe('hello');
   });
@@ -136,7 +136,7 @@ describe('VaultDeserializer.deserialize', () => {
     });
 
     const deserializer = new VaultDeserializer(app, new Map(), '');
-    const result = await deserializer.deserialize('test.yaml');
+    const result = await deserializer.deserializeFile('test.yaml');
 
     expect(result).toEqual(['a', 'b', 'c']);
   });
@@ -148,7 +148,7 @@ describe('VaultDeserializer.deserialize', () => {
 
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
 
-    await expect(deserializer.deserialize('base.yaml'))
+    await expect(deserializer.deserializeFile('base.yaml'))
       .rejects.toThrow('Component not found: "missing"');
   });
 
@@ -157,7 +157,7 @@ describe('VaultDeserializer.deserialize', () => {
       'template.yaml': 'pb-metadata:\n  params: {}\nname: hello\nvalue: 42',
     });
     const deserializer = new VaultDeserializer(app, new Map(), '');
-    const result = await deserializer.deserialize('template.yaml');
+    const result = await deserializer.deserializeFile('template.yaml');
     expect(result).toEqual({ name: 'hello', value: 42 });
   });
 
@@ -167,7 +167,7 @@ describe('VaultDeserializer.deserialize', () => {
       'components/comp.yaml': 'pb-metadata:\n  params:\n    x:\n      type: string\noperator: and',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.deserialize('base.yaml') as Record<string, unknown>;
+    const result = await deserializer.deserializeFile('base.yaml') as Record<string, unknown>;
     expect(result.filter).toEqual({ operator: 'and' });
   });
 });
@@ -178,7 +178,7 @@ describe('VaultDeserializer — qualified !sub error cases', () => {
   it('throws when the source qualifier is unknown', async () => {
     const app = makeApp({ 'base.yaml': 'x: !sub unknown-plugin:some/key' });
     const deserializer = new VaultDeserializer(app, new Map(), '');
-    await expect(deserializer.deserialize('base.yaml'))
+    await expect(deserializer.deserializeFile('base.yaml'))
       .rejects.toThrow('Unknown source qualifier "unknown-plugin"');
   });
 
@@ -186,7 +186,7 @@ describe('VaultDeserializer — qualified !sub error cases', () => {
     const app = makeApp({ 'base.yaml': 'x: !sub my-plugin:missing/key' });
     const sources = new Map([['my-plugin', { name: 'my-plugin', components: {} }]]);
     const deserializer = new VaultDeserializer(app, sources, '');
-    await expect(deserializer.deserialize('base.yaml'))
+    await expect(deserializer.deserializeFile('base.yaml'))
       .rejects.toThrow('Component "missing/key" not found in source "my-plugin"');
   });
 
@@ -194,7 +194,7 @@ describe('VaultDeserializer — qualified !sub error cases', () => {
     const app = makeApp({ 'base.yaml': 'x: !sub my-plugin:../secret' });
     const sources = new Map([['my-plugin', { name: 'my-plugin', components: {} }]]);
     const deserializer = new VaultDeserializer(app, sources, '');
-    await expect(deserializer.deserialize('base.yaml'))
+    await expect(deserializer.deserializeFile('base.yaml'))
       .rejects.toThrow('Invalid !sub path: my-plugin:../secret');
   });
 });
@@ -275,7 +275,7 @@ describe('VaultDeserializer — !fnc tag', () => {
 
   it('evaluates a multi-line block scalar function body', async () => {
     const app = makeApp({});
-    const deserializer = new VaultDeserializer(app, new Map(), '', { items: ['a', 'b'] });
+    const deserializer = new VaultDeserializer(app, new Map(), '', { items: ['a', 'b'] as any });
     const yaml = 'value: !fnc |\n  return params.items.length;';
     const result = await deserializer.deserializeContent(yaml, 'test') as Record<string, unknown>;
     expect(result.value).toBe(2);
@@ -300,11 +300,45 @@ describe('VaultDeserializer — !fnc tag', () => {
 
 // ─── harvestParams ────────────────────────────────────────────────────────────
 
-describe('VaultDeserializer.harvestParams', () => {
+describe('VaultDeserializer.collectFileParams', () => {
+  it('harvests params from a vault file by path', async () => {
+    const app = makeApp({
+      'templates/board.yaml':
+        'pb-metadata:\n  params:\n    taskLocation:\n      type: folder\nviews: []',
+    });
+    const deserializer = new VaultDeserializer(app, new Map(), '');
+    const result = await deserializer.collectFileParams('templates/board.yaml');
+    expect(result.taskLocation).toBeDefined();
+    expect(result.taskLocation!.spec.type).toBe('folder');
+    expect(result.taskLocation!.sources).toContain('');
+  });
+
+  it('harvests params from the template and its components', async () => {
+    const app = makeApp({
+      'templates/board.yaml': 'pb-metadata:\n  params:\n    x:\n      type: string\nfilter: !sub comp',
+      'components/comp.yaml': 'pb-metadata:\n  params:\n    y:\n      type: folder\nv: 1',
+    });
+    const deserializer = new VaultDeserializer(app, new Map(), 'components');
+    const result = await deserializer.collectFileParams('templates/board.yaml');
+    expect(result.x).toBeDefined();
+    expect(result.x!.sources).toContain('');
+    expect(result.y).toBeDefined();
+    expect(result.y!.sources).toContain('comp');
+  });
+
+  it('throws when the file does not exist', async () => {
+    const app = makeApp({});
+    const deserializer = new VaultDeserializer(app, new Map(), '');
+    await expect(deserializer.collectFileParams('missing.yaml'))
+      .rejects.toThrow('File not found: missing.yaml');
+  });
+});
+
+describe('VaultDeserializer.collectContentParams', () => {
   it('returns empty HarvestedParams for content with no !sub refs', async () => {
     const app = makeApp({});
     const deserializer = new VaultDeserializer(app, new Map(), '');
-    const result = await deserializer.harvestParams('views: []', 'test');
+    const result = await deserializer.collectContentParams('views: []', 'test');
     expect(result).toEqual({});
   });
 
@@ -314,10 +348,10 @@ describe('VaultDeserializer.harvestParams', () => {
         'pb-metadata:\n  params:\n    taskLocation:\n      type: folder\ntype: text',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.harvestParams('filter: !sub comp', 'test');
+    const result = await deserializer.collectContentParams('filter: !sub comp', 'test');
     expect(result.taskLocation).toBeDefined();
-    expect(result.taskLocation.spec.type).toBe('folder');
-    expect(result.taskLocation.sources).toContain('comp');
+    expect(result.taskLocation!.spec.type).toBe('folder');
+    expect(result.taskLocation!.sources).toContain('comp');
   });
 
   it('harvests params from nested components and builds correct source paths', async () => {
@@ -328,11 +362,11 @@ describe('VaultDeserializer.harvestParams', () => {
         'pb-metadata:\n  params:\n    x:\n      type: string\nvalue: 1',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.harvestParams('thing: !sub outer', 'test');
+    const result = await deserializer.collectContentParams('thing: !sub outer', 'test');
     expect(result.x).toBeDefined();
     // Source path should chain outer > inner
-    expect(result.x.sources[0]).toContain('outer');
-    expect(result.x.sources[0]).toContain('inner');
+    expect(result.x!.sources[0]).toContain('outer');
+    expect(result.x!.sources[0]).toContain('inner');
   });
 
   it('merges same-named params from multiple components, keeping first spec', async () => {
@@ -343,16 +377,17 @@ describe('VaultDeserializer.harvestParams', () => {
         'pb-metadata:\n  params:\n    loc:\n      type: string\nv: 2',
     });
     const deserializer = new VaultDeserializer(app, new Map(), 'components');
-    const result = await deserializer.harvestParams('x: !sub a\ny: !sub b', 'test');
-    expect(result.loc.sources).toHaveLength(2);
-    expect(result.loc.spec.type).toBe('folder'); // first declaration wins
+    const result = await deserializer.collectContentParams('x: !sub a\ny: !sub b', 'test');
+    expect(result.loc).toBeDefined();
+    expect(result.loc!.sources).toHaveLength(2);
+    expect(result.loc!.spec.type).toBe('folder'); // first declaration wins
   });
 
   it('treats !exp and !fnc as no-ops during harvest', async () => {
     const app = makeApp({});
     const deserializer = new VaultDeserializer(app, new Map(), '');
     // Should not throw even though params is empty
-    const result = await deserializer.harvestParams('value: !exp params.x', 'test');
+    const result = await deserializer.collectContentParams('value: !exp params.x', 'test');
     expect(result).toEqual({});
   });
 });

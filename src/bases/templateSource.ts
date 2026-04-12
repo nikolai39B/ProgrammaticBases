@@ -2,6 +2,8 @@
 
 import { App, TFile } from 'obsidian';
 
+export type TemplateSourceType = 'vault' | 'plugin';
+
 /**
  * A template stored as a vault file.
  * Can be constructed from a {@link TFile} or a vault-relative path string.
@@ -9,12 +11,29 @@ import { App, TFile } from 'obsidian';
  * cached, and returned on first access.
  */
 export class VaultTemplateSource {
-  readonly type = 'vault' as const;
+  //-- Attributes
 
+  // Source type
+  readonly type: TemplateSourceType = 'vault' as const;
+
+  // Template file and path
   private readonly _path: string;
-  private _file: TFile | undefined;
+  private _file: TFile | undefined; // File is initialize lazily
+
+  // App
   private readonly _app: App | undefined;
 
+
+  //-- Constructor
+
+  /**
+   * Construct from a `TFile` when the file object is already in hand (e.g. from a
+   * file-picker modal). The path is read directly from the file; `app` is not needed.
+   *
+   * Construct from a vault-relative path string when only the path is known (e.g.
+   * when restoring a source from a stored `pb-metadata.template` ref). `app` is
+   * required so the `file` accessor can lazily resolve the `TFile` on first access.
+   */
   constructor(file: TFile);
   constructor(path: string, app: App);
   constructor(fileOrPath: TFile | string, app?: App) {
@@ -27,6 +46,8 @@ export class VaultTemplateSource {
     }
   }
 
+
+  //-- Accesors
   get path(): string { return this._path; }
 
   /** Resolves and caches the TFile, throwing if the path cannot be found in the vault. */
@@ -45,8 +66,14 @@ export class VaultTemplateSource {
 
 /** A template registered by a plugin under a named source. */
 export class PluginTemplateSource {
-  readonly type = 'plugin' as const;
+  //-- Attributes
+
+  // Source type
+  readonly type: TemplateSourceType = 'plugin' as const;
   constructor(readonly sourceName: string, readonly templateName: string) {}
+
+  //-- Accessors
+
   /** Returns a `"sourceName:templateName"` ref string. */
   toRef(): string { return `${this.sourceName}:${this.templateName}`; }
 }
@@ -67,4 +94,9 @@ export function parseTemplateRef(ref: string, app: App): TemplateSource {
     return new PluginTemplateSource(ref.substring(0, colonIdx), ref.substring(colonIdx + 1));
   }
   return new VaultTemplateSource(ref, app);
+}
+
+export function getTemplateRefSourceType(ref: string, app: App): TemplateSourceType {
+  const colonIdx = ref.indexOf(':');
+  return colonIdx === -1 ? 'vault' : 'plugin';
 }

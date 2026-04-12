@@ -9,6 +9,7 @@ import {
   mergeHarvestedParams,
   parseParamSpecs,
 } from 'bases/templateParams';
+import { parseTemplateRef, PluginTemplateSource, VaultTemplateSource } from 'bases/templateSource';
 
 type ResolvedRef =
   | { type: 'vault'; path: string }
@@ -22,9 +23,10 @@ type ResolvedRef =
  * `content:` is used as the resolved value.
  *
  * **Two-pass usage:**
- * - Pass 1 (`harvestParams`): resolves `!sub` only to collect all declared
- *   params from the template and every nested component. `!exp`/`!fnc` are no-ops.
- * - Pass 2 (`deserialize` / `deserializeContent`): resolves `!sub` + evaluates
+ * - Pass 1 (`collectFileParams` / `collectContentParams`): resolves `!sub` only to
+ *   collect all declared params from the template and every nested component.
+ *   `!exp`/`!fnc` are no-ops.
+ * - Pass 2 (`deserializeFile` / `deserializeContent`): resolves `!sub` + evaluates
  *   `!exp`/`!fnc` with the user-supplied `resolvedParams`.
  *
  * Unqualified !sub refs (e.g. `!sub filter/isTask`) are resolved against the
@@ -41,11 +43,59 @@ export class VaultDeserializer {
     private resolvedParams: ResolvedParams = {},
   ) {}
 
+  //-- Collect Params
+
+  /**
+   * Pass 1 entry point for a vault file path.
+   * Mirrors {@link deserializeFile} but runs the collect pass instead.
+   *
+   * @param path - vault-relative path to the template YAML file
+   * @returns All discovered params, keyed by param name with sources accumulated.
+   */
+  async collectFileParams(path: string): Promise<HarvestedParams> {
+    const discoveredParams: HarvestedParams = {};
+    await harvestResolved(
+      { type: 'vault', path },
+      this.app,
+      new Set(),
+      this.sources,
+      this.componentsFolder,
+      discoveredParams,
+      '',
+    );
+    return discoveredParams;
+  }
+
+  /**
+   * Pass 1 entry point for an in-memory YAML string.
+   * Mirrors {@link deserializeContent} but runs the collect pass instead.
+   *
+   * @param content - raw YAML string
+   * @param id - unique identifier for circular reference detection
+   * @returns All discovered params, keyed by param name with sources accumulated.
+   */
+  async collectContentParams(content: string, id: string): Promise<HarvestedParams> {
+    const discoveredParams: HarvestedParams = {};
+    await harvestResolved(
+      { type: 'memory', content, id },
+      this.app,
+      new Set(),
+      this.sources,
+      this.componentsFolder,
+      discoveredParams,
+      '',
+    );
+    return discoveredParams;
+  }
+
+
+  //-- Deserialize
+
   /**
    * Deserializes a YAML file at the given vault path (Pass 2).
    * @param path - vault-relative path to the YAML file
    */
-  deserialize(path: string): Promise<unknown> {
+  deserializeFile(path: string): Promise<unknown> {
     return deserializeResolved(
       { type: 'vault', path },
       this.app,
@@ -73,29 +123,6 @@ export class VaultDeserializer {
       '',
     );
   }
-
-  /**
-   * Pass 1: resolves all `!sub` tags to discover every `metadata.params`
-   * declaration across the template and its transitive components.
-   * `!exp`/`!fnc` are no-ops during this pass.
-   *
-   * @param content - raw YAML string of the template's `content:` block
-   * @param id - unique identifier for the template, used for circular ref detection
-   * @returns All discovered params, keyed by param name with sources accumulated.
-   */
-  async harvestParams(content: string, id: string): Promise<HarvestedParams> {
-    const discoveredParams: HarvestedParams = {};
-    await harvestResolved(
-      { type: 'memory', content, id },
-      this.app,
-      new Set(),
-      this.sources,
-      this.componentsFolder,
-      discoveredParams,
-      '',
-    );
-    return discoveredParams;
-  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -119,35 +146,47 @@ function resolveRef(
   componentsFolder: string,
   app: App,
 ): ResolvedRef {
-  const colonIdx = ref.indexOf(':');
+  // Parse the ref into a template source
+  const refSource = parseTemplateRef(ref, app);
+  if (!refSource) {
+    throw new Error(`Invalid ref "${ref}" in !sub`);
+  }
 
-  if (colonIdx !== -1) {
-    // Qualified — resolve against the named external source
-    const qualifier = ref.substring(0, colonIdx);
-    const key = ref.substring(colonIdx + 1);
-
-    if (key.includes('..')) {
-      throw new Error(`Invalid !sub path: ${ref}`);
+  // Handle vault source
+  if (refSource instanceof VaultTemplateSource) {
+    // Validate that the path does not escape the vault
+    if (refSource.path.includes('..')) {
+      throw new Error(`Invalid !sub path: ${refSource.path}`);
     }
 
-    const source = sources.get(qualifier);
-    if (!source) throw new Error(`Unknown source qualifier "${qualifier}" in !sub: ${ref}`);
+    // Get the vault-relative path to the template
+    const vaultPath = resolveVaultPath(componentsFolder, refSource.path, app);
+    if (!vaultPath) {
+      throw new Error(`Component not found: "${refSource.path}" in vault folder "${componentsFolder}"`);
+    }
 
-    const content = source.components?.[key];
-    if (!content) throw new Error(`Component "${key}" not found in source "${qualifier}"`);
-
-    return { type: 'memory', content, id: `${qualifier}:${key}` };
+    return { type: 'vault', path: vaultPath };
   }
 
-  // Unqualified — resolve against the vault components folder
-  if (ref.includes('..')) {
-    throw new Error(`Invalid !sub path: ${ref}`);
+  // Handle plugin source
+  if (refSource instanceof PluginTemplateSource) {
+    // Get the source
+    const source = sources.get(refSource.sourceName);
+    if (!source) {
+      throw new Error(`Unknown source qualifier "${refSource.sourceName}" in !sub: ${ref}`);
+    }
+
+    // Get the content
+    const content = source.components?.[refSource.templateName];
+    if (!content) {
+      throw new Error(`Component "${refSource.templateName}" not found in source "${refSource.sourceName}"`);
+    }
+
+    return { type: 'memory', content, id: refSource.toRef() };
   }
 
-  const vaultPath = resolveVaultPath(componentsFolder, ref, app);
-  if (vaultPath) return { type: 'vault', path: vaultPath };
-
-  throw new Error(`Component not found: "${ref}" in vault folder "${componentsFolder}"`);
+  // Unhandled
+  throw new Error(`Invalid ref "${ref}" in !sub`);
 }
 
 /**
@@ -218,6 +257,7 @@ function buildSchema(
   resolvedParams: ResolvedParams,
   currentSourcePath: string,
 ): yaml.Schema {
+  // This tag handles substitution of components into the base or parent component
   const subTag = new yaml.Type('!sub', {
     kind: 'scalar',
     resolve: (data: unknown) => typeof data === 'string',
@@ -229,6 +269,7 @@ function buildSchema(
     },
   });
 
+  // This tag evaulates the value as a javascript expression
   const expTag = new yaml.Type('!exp', {
     kind: 'scalar',
     resolve: (data: unknown) => typeof data === 'string',
@@ -243,6 +284,7 @@ function buildSchema(
     },
   });
 
+  // This tag evaluates the value as a javascript function body
   const fncTag = new yaml.Type('!fnc', {
     kind: 'scalar',
     resolve: (data: unknown) => typeof data === 'string',
