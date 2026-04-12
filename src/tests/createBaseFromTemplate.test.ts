@@ -8,7 +8,7 @@ import {
   OutputPathModal,
   ConfirmOverwriteModal,
 } from '../commands/createBaseFromTemplate';
-import { VaultTemplateSource, PluginTemplateSource } from 'bases/templateSource';
+import { VaultTemplateSource, ExternalTemplateSource } from 'bases/templateSource';
 import { HarvestedParams, ResolvedParams } from 'bases/templateParams';
 
 vi.mock('main', () => ({ default: class {} }));
@@ -166,7 +166,7 @@ describe('TemplatePicker', () => {
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('')).toEqual([
         makeVaultTemplate(vaultFile),
-        new PluginTemplateSource('my-plugin', 'dashboard'),
+        new ExternalTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
 
@@ -177,7 +177,7 @@ describe('TemplatePicker', () => {
       ]);
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('')).toEqual([
-        new PluginTemplateSource('my-plugin', 'dashboard'),
+        new ExternalTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
 
@@ -188,7 +188,7 @@ describe('TemplatePicker', () => {
       ]);
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('dash')).toEqual([
-        new PluginTemplateSource('my-plugin', 'dashboard'),
+        new ExternalTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
   });
@@ -266,7 +266,7 @@ describe('OutputPathModal', () => {
     });
 
     it('uses templateName as the file name for plugin templates', () => {
-      const pluginTemplate = new PluginTemplateSource('my-plugin', 'dashboard');
+      const pluginTemplate = new ExternalTemplateSource('my-plugin', 'dashboard');
       const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate, {});
       expect((modal as any).outputName).toBe('dashboard');
     });
@@ -311,7 +311,7 @@ describe('OutputPathModal', () => {
     });
 
     it('calls templateFileManager.createBaseFromTemplate for plugin templates', async () => {
-      const pluginTemplate = new PluginTemplateSource('my-plugin', 'dashboard');
+      const pluginTemplate = new ExternalTemplateSource('my-plugin', 'dashboard');
       const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate, {});
       await (modal as any).create();
       expect(plugin.templateFileManager.createBaseFromTemplate).toHaveBeenCalledWith(pluginTemplate, 'dashboard', {});

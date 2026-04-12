@@ -2,7 +2,7 @@ import { App } from 'obsidian';
 import { ExternalSource } from 'settings';
 import { BaseBuilder } from 'bases/baseBuilder';
 import { BaseConfig } from 'bases/baseConfig';
-import { PluginTemplateSource, TemplateSource, VaultTemplateSource } from 'bases/templateSource';
+import { ExternalTemplateSource, TemplateSource, VaultTemplateSource } from 'bases/templateSource';
 import {
   HarvestedParams,
   ResolvedParams,
@@ -15,7 +15,7 @@ import { ViewRegistry } from 'views/viewRegistry';
  * Orchestrates the "template → BaseConfig → .base file" pipeline.
  *
  * Accepts either a {@link VaultTemplateSource} (vault-relative YAML file) or a
- * `PluginTemplateSource` (qualified `"sourceName:templateName"` ref registered
+ * `ExternalTemplateSource` (qualified `"sourceName:templateName"` ref registered
  * by an external plugin).
  *
  * **Template file format**: `pb-metadata` (optional) at the top level declares typed
@@ -61,11 +61,11 @@ export class TemplateFileManager {
     );
 
     if (source instanceof VaultTemplateSource) {
-      return deserializer.collectFileParams(source.path);
+      return deserializer.collectFileParams(source);
     } else {
-      const content = this.pluginTemplateContent(source);
+      const content = this.externalTemplateContent(source);
       if (content === null) return {};
-      return deserializer.collectContentParams(content, source.toRef());
+      return deserializer.collectContentParams(source, content);
     }
   }
 
@@ -135,7 +135,7 @@ export class TemplateFileManager {
     let raw: unknown;
     if (source instanceof VaultTemplateSource) {
       try {
-        raw = await deserializer.deserializeFile(source.path);
+        raw = await deserializer.deserializeFile(source);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (msg.startsWith('File not found:')) {
@@ -146,9 +146,9 @@ export class TemplateFileManager {
         throw e;
       }
     } else {
-      const content = this.pluginTemplateContent(source);
+      const content = this.externalTemplateContent(source);
       if (content === null) throw new Error(`Template "${source.templateName}" not found in source "${source.sourceName}"`);
-      raw = await deserializer.deserializeContent(content, source.toRef());
+      raw = await deserializer.deserializeContent(source, content);
     }
 
     const config = BaseConfig.deserialize(raw as Record<string, unknown>, this.viewRegistry);
@@ -162,7 +162,7 @@ export class TemplateFileManager {
   }
 
   /** Looks up a plugin template's content string, or null if not registered. */
-  private pluginTemplateContent(source: PluginTemplateSource): string | null {
+  private externalTemplateContent(source: ExternalTemplateSource): string | null {
     return this.getSources().get(source.sourceName)?.templates?.[source.templateName] ?? null;
   }
 }

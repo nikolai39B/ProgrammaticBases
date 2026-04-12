@@ -1,6 +1,6 @@
 import { App, Command, Modal, Notice, Setting, SuggestModal, TFile, TFolder, normalizePath } from 'obsidian';
 import ProgrammaticBases from 'main';
-import { PluginTemplateSource, TemplateSource, VaultTemplateSource } from 'bases/templateSource';
+import { ExternalTemplateSource, TemplateSource, VaultTemplateSource } from 'bases/templateSource';
 import { FolderSuggest } from 'settings';
 import {
   HarvestedParam,
@@ -82,18 +82,18 @@ export class TemplatePicker extends SuggestModal<TemplateSource> {
           .map(f => new VaultTemplateSource(f))
       : [];
 
-    // Collect plugin-registered templates, flattened from all sources and filtered by query
-    const pluginTemplates: TemplateSource[] = [];
+    // Collect external-source templates, flattened from all sources and filtered by query
+    const externalTemplates: TemplateSource[] = [];
     for (const [sourceName, externalSource] of this.plugin.allSources) {
       for (const templateName of Object.keys(externalSource.templates ?? {})) {
         if (`${sourceName}:${templateName}`.toLowerCase().includes(q)) {
-          pluginTemplates.push(new PluginTemplateSource(sourceName, templateName));
+          externalTemplates.push(new ExternalTemplateSource(sourceName, templateName));
         }
       }
     }
 
     // Vault templates appear first, followed by plugin-registered templates
-    return [...vaultTemplates, ...pluginTemplates];
+    return [...vaultTemplates, ...externalTemplates];
   }
 
   /**

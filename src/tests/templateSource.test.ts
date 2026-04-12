@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { TFile } from 'obsidian';
-import { VaultTemplateSource, PluginTemplateSource, parseTemplateRef } from 'bases/templateSource';
+import { VaultTemplateSource, ExternalTemplateSource, parseTemplateRef } from 'bases/templateSource';
 
 function makeTFile(path = 'Templates/my-template.yaml', basename = 'my-template'): TFile {
   const f = new TFile();
@@ -78,21 +78,21 @@ describe('VaultTemplateSource (path + app constructor)', () => {
   });
 });
 
-// ── PluginTemplateSource ──────────────────────────────────────────────────────
+// ── ExternalTemplateSource ──────────────────────────────────────────────────────
 
-describe('PluginTemplateSource', () => {
+describe('ExternalTemplateSource', () => {
   it('stores sourceName and templateName', () => {
-    const source = new PluginTemplateSource('task-base', 'dashboard');
+    const source = new ExternalTemplateSource('task-base', 'dashboard');
     expect(source.sourceName).toBe('task-base');
     expect(source.templateName).toBe('dashboard');
   });
 
   it('toRef() returns "sourceName:templateName"', () => {
-    expect(new PluginTemplateSource('task-base', 'dashboard').toRef()).toBe('task-base:dashboard');
+    expect(new ExternalTemplateSource('task-base', 'dashboard').toRef()).toBe('task-base:dashboard');
   });
 
   it('type is "plugin"', () => {
-    expect(new PluginTemplateSource('task-base', 'dashboard').type).toBe('plugin');
+    expect(new ExternalTemplateSource('task-base', 'dashboard').type).toBe('external');
   });
 });
 
@@ -101,11 +101,11 @@ describe('PluginTemplateSource', () => {
 describe('parseTemplateRef', () => {
   const app = { vault: { getFileByPath: vi.fn() } } as any;
 
-  it('returns a PluginTemplateSource for a qualified "sourceName:templateName" ref', () => {
+  it('returns a ExternalTemplateSource for a qualified "sourceName:templateName" ref', () => {
     const result = parseTemplateRef('task-base:dashboard', app);
-    expect(result).toBeInstanceOf(PluginTemplateSource);
-    expect((result as PluginTemplateSource).sourceName).toBe('task-base');
-    expect((result as PluginTemplateSource).templateName).toBe('dashboard');
+    expect(result).toBeInstanceOf(ExternalTemplateSource);
+    expect((result as ExternalTemplateSource).sourceName).toBe('task-base');
+    expect((result as ExternalTemplateSource).templateName).toBe('dashboard');
   });
 
   it('returns a VaultTemplateSource for an unqualified path', () => {
@@ -116,8 +116,8 @@ describe('parseTemplateRef', () => {
 
   it('splits on the first colon only, preserving rest as templateName', () => {
     const result = parseTemplateRef('my-plugin:some:template', app);
-    expect(result).toBeInstanceOf(PluginTemplateSource);
-    expect((result as PluginTemplateSource).sourceName).toBe('my-plugin');
-    expect((result as PluginTemplateSource).templateName).toBe('some:template');
+    expect(result).toBeInstanceOf(ExternalTemplateSource);
+    expect((result as ExternalTemplateSource).sourceName).toBe('my-plugin');
+    expect((result as ExternalTemplateSource).templateName).toBe('some:template');
   });
 });

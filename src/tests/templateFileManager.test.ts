@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TemplateFileManager } from '../fileManagement/templateFileManager';
-import { VaultTemplateSource, PluginTemplateSource } from 'bases/templateSource';
+import { VaultTemplateSource, ExternalTemplateSource } from 'bases/templateSource';
 import { VaultDeserializer } from 'fileManagement/vaultDeserializer';
 import { BaseConfig } from 'bases/baseConfig';
 import { BaseBuilder } from 'bases/baseBuilder';
@@ -83,7 +83,7 @@ describe('TemplateFileManager', () => {
       mockPipeline();
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
       await manager.createBaseFromTemplate(source, 'output');
-      expect(deserializeFile).toHaveBeenCalledWith(source.path);
+      expect(deserializeFile).toHaveBeenCalledWith(source);
     });
 
     it('passes raw data to BaseConfig.deserialize with the view registry', async () => {
@@ -140,9 +140,9 @@ describe('TemplateFileManager', () => {
     });
   });
 
-  // ── PluginTemplateSource ─────────────────────────────────────────────────────
+  // ── ExternalTemplateSource ─────────────────────────────────────────────────────
 
-  describe('PluginTemplateSource', () => {
+  describe('ExternalTemplateSource', () => {
     it('deserializes via VaultDeserializer.deserializeContent with the template content and ref', async () => {
       const sources = new Map([
         ['task-base', { name: 'task-base', templates: { 'dashboard': 'views: []' } }],
@@ -150,9 +150,9 @@ describe('TemplateFileManager', () => {
       const { manager } = makeSetup({ sources });
       const { deserializeContent } = mockDeserializer();
       mockPipeline();
-      const source = new PluginTemplateSource('task-base', 'dashboard');
+      const source = new ExternalTemplateSource('task-base', 'dashboard');
       await manager.createBaseFromTemplate(source, 'output');
-      expect(deserializeContent).toHaveBeenCalledWith('views: []', 'task-base:dashboard');
+      expect(deserializeContent).toHaveBeenCalledWith(source, 'views: []');
     });
 
     it('stamps pb-metadata.template with the plugin ref via BaseBuilder.setMetadata', async () => {
@@ -162,7 +162,7 @@ describe('TemplateFileManager', () => {
       const { manager } = makeSetup({ sources });
       mockDeserializer();
       const { builderInstance } = mockPipeline();
-      const source = new PluginTemplateSource('task-base', 'dashboard');
+      const source = new ExternalTemplateSource('task-base', 'dashboard');
       await manager.createBaseFromTemplate(source, 'output');
       expect(builderInstance.setMetadata).toHaveBeenCalledWith(
         expect.objectContaining({ template: 'task-base:dashboard' })
@@ -173,7 +173,7 @@ describe('TemplateFileManager', () => {
       const { manager } = makeSetup();
       mockDeserializer();
       mockPipeline();
-      const source = new PluginTemplateSource('unknown-plugin', 'dashboard');
+      const source = new ExternalTemplateSource('unknown-plugin', 'dashboard');
       await expect(manager.createBaseFromTemplate(source, 'output'))
         .rejects.toThrow('not found in source "unknown-plugin"');
     });
@@ -185,7 +185,7 @@ describe('TemplateFileManager', () => {
       const { manager } = makeSetup({ sources });
       mockDeserializer();
       mockPipeline();
-      const source = new PluginTemplateSource('task-base', 'missing-template');
+      const source = new ExternalTemplateSource('task-base', 'missing-template');
       await expect(manager.createBaseFromTemplate(source, 'output'))
         .rejects.toThrow('Template "missing-template" not found in source "task-base"');
     });
@@ -265,14 +265,14 @@ describe('TemplateFileManager', () => {
       const { collectFileParams } = mockDeserializer({}, harvested);
       const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
       const result = await manager.readParamSpecsFromTemplate(source);
-      expect(collectFileParams).toHaveBeenCalledWith('Templates/board.yaml');
+      expect(collectFileParams).toHaveBeenCalledWith(source);
       expect(result).toEqual(harvested);
     });
 
     it('returns {} for a plugin template with no registered content', async () => {
       const { manager } = makeSetup();
       mockDeserializer();
-      const source = new PluginTemplateSource('task-base', 'dashboard');
+      const source = new ExternalTemplateSource('task-base', 'dashboard');
       const result = await manager.readParamSpecsFromTemplate(source);
       expect(result).toEqual({});
     });
@@ -283,9 +283,9 @@ describe('TemplateFileManager', () => {
       ]);
       const { manager } = makeSetup({ sources });
       const { collectContentParams } = mockDeserializer();
-      const source = new PluginTemplateSource('task-base', 'dashboard');
+      const source = new ExternalTemplateSource('task-base', 'dashboard');
       await manager.readParamSpecsFromTemplate(source);
-      expect(collectContentParams).toHaveBeenCalledWith('views: []', 'task-base:dashboard');
+      expect(collectContentParams).toHaveBeenCalledWith(source, 'views: []');
     });
   });
 

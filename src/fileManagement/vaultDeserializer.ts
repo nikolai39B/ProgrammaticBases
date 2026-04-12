@@ -1,5 +1,5 @@
 import * as yaml from 'js-yaml';
-import { App, normalizePath } from 'obsidian';
+import { App } from 'obsidian';
 import { ExternalSource } from 'settings';
 import {
   HarvestedParams,
@@ -9,18 +9,17 @@ import {
   mergeHarvestedParams,
   parseParamSpecs,
 } from 'bases/templateParams';
-import { parseTemplateRef, PluginTemplateSource, VaultTemplateSource } from 'bases/templateSource';
+import { parseTemplateRef, ExternalTemplateSource, VaultTemplateSource } from 'bases/templateSource';
 
 type ResolvedRef =
-  | { type: 'vault'; path: string }
-  | { type: 'memory'; content: string; id: string };
+  | { type: 'vault'; source: VaultTemplateSource }
+  | { type: 'external'; source: ExternalTemplateSource; content: string };
 
 /**
  * Deserializes YAML files from the Obsidian vault, resolving !sub tags.
  *
- * Files use an optional `metadata:` / `content:` wrapper format.
- * When present, `metadata:` is stripped before substitution and only
- * `content:` is used as the resolved value.
+ * Files use an optional `pb-metadata:` wrapper. When present, `pb-metadata` is
+ * stripped and all remaining top-level keys are used as the resolved value.
  *
  * **Two-pass usage:**
  * - Pass 1 (`collectFileParams` / `collectContentParams`): resolves `!sub` only to
@@ -46,16 +45,16 @@ export class VaultDeserializer {
   //-- Collect Params
 
   /**
-   * Pass 1 entry point for a vault file path.
+   * Pass 1 entry point for a vault template source.
    * Mirrors {@link deserializeFile} but runs the collect pass instead.
    *
-   * @param path - vault-relative path to the template YAML file
+   * @param source - vault template source to harvest params from
    * @returns All discovered params, keyed by param name with sources accumulated.
    */
-  async collectFileParams(path: string): Promise<HarvestedParams> {
+  async collectFileParams(source: VaultTemplateSource): Promise<HarvestedParams> {
     const discoveredParams: HarvestedParams = {};
-    await harvestResolved(
-      { type: 'vault', path },
+    await collectParamsFromResolvedRef(
+      { type: 'vault', source },
       this.app,
       new Set(),
       this.sources,
@@ -67,17 +66,17 @@ export class VaultDeserializer {
   }
 
   /**
-   * Pass 1 entry point for an in-memory YAML string.
+   * Pass 1 entry point for an external template source.
    * Mirrors {@link deserializeContent} but runs the collect pass instead.
    *
+   * @param source - external template source (used as unique id for circular reference detection)
    * @param content - raw YAML string
-   * @param id - unique identifier for circular reference detection
    * @returns All discovered params, keyed by param name with sources accumulated.
    */
-  async collectContentParams(content: string, id: string): Promise<HarvestedParams> {
+  async collectContentParams(source: ExternalTemplateSource, content: string): Promise<HarvestedParams> {
     const discoveredParams: HarvestedParams = {};
-    await harvestResolved(
-      { type: 'memory', content, id },
+    await collectParamsFromResolvedRef(
+      { type: 'external', source, content },
       this.app,
       new Set(),
       this.sources,
@@ -92,12 +91,12 @@ export class VaultDeserializer {
   //-- Deserialize
 
   /**
-   * Deserializes a YAML file at the given vault path (Pass 2).
-   * @param path - vault-relative path to the YAML file
+   * Deserializes a vault template source (Pass 2).
+   * @param source - vault template source to deserialize
    */
-  deserializeFile(path: string): Promise<unknown> {
+  deserializeFile(source: VaultTemplateSource): Promise<unknown> {
     return deserializeResolved(
-      { type: 'vault', path },
+      { type: 'vault', source },
       this.app,
       new Set(),
       this.sources,
@@ -108,13 +107,13 @@ export class VaultDeserializer {
   }
 
   /**
-   * Deserializes a raw YAML string (Pass 2).
+   * Deserializes an external template source (Pass 2).
+   * @param source - external template source (used as unique id for circular reference detection)
    * @param content - raw YAML string
-   * @param id - unique identifier for circular reference detection
    */
-  deserializeContent(content: string, id: string): Promise<unknown> {
+  deserializeContent(source: ExternalTemplateSource, content: string): Promise<unknown> {
     return deserializeResolved(
-      { type: 'memory', content, id },
+      { type: 'external', source, content },
       this.app,
       new Set(),
       this.sources,
@@ -127,15 +126,10 @@ export class VaultDeserializer {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Resolves a vault ref, appending `.yaml` if not already present. */
-function resolveVaultPath(folderPath: string, ref: string, app: App): string | null {
-  const withYaml = ref.endsWith('.yaml') ? ref : `${ref}.yaml`;
-  const candidate = normalizePath(`${folderPath}/${withYaml}`);
-  return app.vault.getFileByPath(candidate) ? candidate : null;
-}
-
 /**
- * Resolves a !sub reference to either a vault path or in-memory content.
+ * Resolves a !sub reference to a ResolvedRef.
+ * Delegates path resolution to {@link parseTemplateRef} so all vault paths are
+ * fully resolved before reaching the deserializer.
  *
  * Qualified refs target a named external source exclusively.
  * Unqualified refs search the vault components folder exclusively.
@@ -146,47 +140,32 @@ function resolveRef(
   componentsFolder: string,
   app: App,
 ): ResolvedRef {
-  // Parse the ref into a template source
-  const refSource = parseTemplateRef(ref, app);
-  if (!refSource) {
-    throw new Error(`Invalid ref "${ref}" in !sub`);
+  if (ref.includes('..')) {
+    throw new Error(`Invalid !sub path: ${ref}`);
   }
 
-  // Handle vault source
-  if (refSource instanceof VaultTemplateSource) {
-    // Validate that the path does not escape the vault
-    if (refSource.path.includes('..')) {
-      throw new Error(`Invalid !sub path: ${refSource.path}`);
+  const source = parseTemplateRef(ref, app, componentsFolder);
+
+  // Handle external source
+  if (source instanceof ExternalTemplateSource) {
+    const extSource = sources.get(source.sourceName);
+    if (!extSource) {
+      throw new Error(`Unknown source qualifier "${source.sourceName}" in !sub: ${ref}`);
     }
-
-    // Get the vault-relative path to the template
-    const vaultPath = resolveVaultPath(componentsFolder, refSource.path, app);
-    if (!vaultPath) {
-      throw new Error(`Component not found: "${refSource.path}" in vault folder "${componentsFolder}"`);
-    }
-
-    return { type: 'vault', path: vaultPath };
-  }
-
-  // Handle plugin source
-  if (refSource instanceof PluginTemplateSource) {
-    // Get the source
-    const source = sources.get(refSource.sourceName);
-    if (!source) {
-      throw new Error(`Unknown source qualifier "${refSource.sourceName}" in !sub: ${ref}`);
-    }
-
-    // Get the content
-    const content = source.components?.[refSource.templateName];
+    const content = extSource.components?.[source.templateName];
     if (!content) {
-      throw new Error(`Component "${refSource.templateName}" not found in source "${refSource.sourceName}"`);
+      throw new Error(`Component "${source.templateName}" not found in source "${source.sourceName}"`);
     }
-
-    return { type: 'memory', content, id: refSource.toRef() };
+    return { type: 'external', source, content };
   }
 
-  // Unhandled
-  throw new Error(`Invalid ref "${ref}" in !sub`);
+  // Handle vault source (fully resolved by parseTemplateRef)
+  if (source instanceof VaultTemplateSource) {
+    return { type: 'vault', source };
+  }
+
+  // null — vault component not found
+  throw new Error(`Component not found: "${ref}" in vault folder "${componentsFolder}"`);
 }
 
 /**
@@ -221,7 +200,7 @@ async function deserializeResolved(
   resolvedParams: ResolvedParams,
   sourcePath: string,
 ): Promise<unknown> {
-  const id = resolved.type === 'vault' ? resolved.path : resolved.id;
+  const id = resolved.source.toRef();
 
   if (visited.has(id)) {
     throw new Error(`Circular !sub reference detected: ${id}`);
@@ -229,8 +208,8 @@ async function deserializeResolved(
 
   let content: string;
   if (resolved.type === 'vault') {
-    const file = app.vault.getFileByPath(resolved.path);
-    if (!file) throw new Error(`File not found: ${resolved.path}`);
+    const file = app.vault.getFileByPath(resolved.source.path);
+    if (!file) throw new Error(`File not found: ${resolved.source.path}`);
     content = await app.vault.read(file);
   } else {
     content = resolved.content;
@@ -244,7 +223,7 @@ async function deserializeResolved(
     resolvedParams,
     sourcePath,
   );
-  // Parse YAML then unwrap content: from wrapper format before resolving promises
+  // Parse YAML then unwrap pb-metadata before resolving promises
   const raw = yaml.load(content, { schema });
   return resolvePromises(unwrapContent(raw));
 }
@@ -269,7 +248,7 @@ function buildSchema(
     },
   });
 
-  // This tag evaulates the value as a javascript expression
+  // This tag evaluates the value as a javascript expression
   const expTag = new yaml.Type('!exp', {
     kind: 'scalar',
     resolve: (data: unknown) => typeof data === 'string',
@@ -305,10 +284,10 @@ function buildSchema(
 // ── Pass 1 harvesting ─────────────────────────────────────────────────────────
 
 /**
- * Pass 1 core: resolves `!sub` only, harvesting `metadata.params` from each
+ * Pass 1 core: resolves `!sub` only, harvesting `pb-metadata.params` from each
  * component into `discoveredParams`. `!exp`/`!fnc` are no-ops.
  */
-async function harvestResolved(
+async function collectParamsFromResolvedRef(
   resolved: ResolvedRef,
   app: App,
   visited: Set<string>,
@@ -317,7 +296,7 @@ async function harvestResolved(
   discoveredParams: HarvestedParams,
   sourcePath: string,
 ): Promise<unknown> {
-  const id = resolved.type === 'vault' ? resolved.path : resolved.id;
+  const id = resolved.source.toRef();
 
   if (visited.has(id)) {
     throw new Error(`Circular !sub reference detected: ${id}`);
@@ -325,8 +304,8 @@ async function harvestResolved(
 
   let content: string;
   if (resolved.type === 'vault') {
-    const file = app.vault.getFileByPath(resolved.path);
-    if (!file) throw new Error(`File not found: ${resolved.path}`);
+    const file = app.vault.getFileByPath(resolved.source.path);
+    if (!file) throw new Error(`File not found: ${resolved.source.path}`);
     content = await app.vault.read(file);
   } else {
     content = resolved.content;
@@ -374,7 +353,7 @@ function buildHarvestSchema(
     construct: (ref: string) => {
       const resolved = resolveRef(ref, sources, componentsFolder, app);
       const childPath = currentSourcePath ? `${currentSourcePath} > ${ref}` : ref;
-      return harvestResolved(resolved, app, visited, sources, componentsFolder, discoveredParams, childPath);
+      return collectParamsFromResolvedRef(resolved, app, visited, sources, componentsFolder, discoveredParams, childPath);
     },
   });
 
