@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TFile } from 'obsidian';                              // ← resolves to __mocks__/obsidian.ts
-import { BaseFileManager } from 'fileManagement/baseFileManager';
+import { BaseFileIO } from 'fileManagement/baseFileIO';
 import { BaseConfig } from 'bases/baseConfig';
 import * as yaml from 'js-yaml';
 
@@ -64,19 +64,19 @@ function mockExistingPaths(
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('BaseFileManager', () => {
+describe('BaseFileIO', () => {
 
   let vault: ReturnType<typeof makeApp>['vault'];
   let app: ReturnType<typeof makeApp>['app'];
   let viewRegistry: ReturnType<typeof makeViewRegistry>;
-  let manager: BaseFileManager;
+  let manager: BaseFileIO;
   let config: BaseConfig;
 
   beforeEach(() => {
     vi.clearAllMocks();
     ({ vault, app } = makeApp());
     viewRegistry = makeViewRegistry();
-    manager = new BaseFileManager(app, viewRegistry);
+    manager = new BaseFileIO(app, () => viewRegistry);
     config = makeConfig();
   });
 

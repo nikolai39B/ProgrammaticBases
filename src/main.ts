@@ -11,8 +11,10 @@ import { TableViewInstaller } from 'views/tableViewInstaller';
 import { ViewTypeInstaller } from 'views/viewTypeInstaller';
 import { ViewRegistry } from 'views/viewRegistry';
 
-import { BaseFileManager } from 'fileManagement/baseFileManager';
-import { TemplateFileManager } from 'fileManagement/templateFileManager';
+import { BaseFileIO } from 'fileManagement/baseFileIO';
+import { TemplateEvaluator } from 'fileManagement/templateEvaluator';
+import { TemplateFileIO } from 'fileManagement/templateFileIO';
+import { TemplateSourceResolver } from 'bases/templateSource';
 
 import { PluginDependencyManager } from '../../pluginUtilsCommon/src/dependency';
 
@@ -25,14 +27,14 @@ export default class ProgrammaticBases extends Plugin {
   private static _instance: ProgrammaticBases;
   static get instance(): ProgrammaticBases { return ProgrammaticBases._instance; }
 
-  // File manager
-  private _fileManager: BaseFileManager;
-  get fileManager(): BaseFileManager { return this._fileManager; }
+  // File I/O
+  private _baseFileIO: BaseFileIO;
+  get baseFileIO(): BaseFileIO { return this._baseFileIO; }
 
-  // Template file manager
-  private _templateFileManager: TemplateFileManager;
-  get templateFileManager(): TemplateFileManager { return this._templateFileManager; }
-  
+  // Template file I/O
+  private _templateFileIO: TemplateFileIO;
+  get templateFileIO(): TemplateFileIO { return this._templateFileIO; }
+
   // API
   private _api: ProgrammaticBasesAPI;
 
@@ -80,14 +82,15 @@ export default class ProgrammaticBases extends Plugin {
       ];
       this._viewInstallers.forEach(i => i.install(this.viewRegistry));
 
-      // Create the file manager
-      this._fileManager = new BaseFileManager(this.app, this._viewRegistry);
-      this._templateFileManager = new TemplateFileManager(
-        this.app,
-        this._fileManager,
-        this._viewRegistry,
-        () => this.allSources,
-        () => this.componentsFolder,
+      // Create the file management layer
+      const resolver = new TemplateSourceResolver(this.app, () => this.componentsFolder);
+      const evaluator = new TemplateEvaluator(this.app, resolver, () => this.allSources);
+      this._baseFileIO = new BaseFileIO(this.app, () => this._viewRegistry);
+      this._templateFileIO = new TemplateFileIO(
+        this._baseFileIO,
+        () => this._viewRegistry,
+        resolver,
+        evaluator,
       );
 
       // Register commands

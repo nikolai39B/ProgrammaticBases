@@ -2,7 +2,11 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { TFile } from 'obsidian';
-import { VaultTemplateSource, ExternalTemplateSource, parseTemplateRef } from 'bases/templateSource';
+import {
+  VaultTemplateSource,
+  ExternalTemplateSource,
+  TemplateSourceResolver,
+} from 'bases/templateSource';
 
 function makeTFile(path = 'Templates/my-template.yaml', basename = 'my-template'): TFile {
   const f = new TFile();
@@ -91,33 +95,99 @@ describe('ExternalTemplateSource', () => {
     expect(new ExternalTemplateSource('task-base', 'dashboard').toRef()).toBe('task-base:dashboard');
   });
 
-  it('type is "plugin"', () => {
+  it('type is "external"', () => {
     expect(new ExternalTemplateSource('task-base', 'dashboard').type).toBe('external');
   });
 });
 
-// ── parseTemplateRef ──────────────────────────────────────────────────────────
+// ── TemplateSourceResolver ────────────────────────────────────────────────────
 
-describe('parseTemplateRef', () => {
-  const app = { vault: { getFileByPath: vi.fn() } } as any;
-
-  it('returns a ExternalTemplateSource for a qualified "sourceName:templateName" ref', () => {
-    const result = parseTemplateRef('task-base:dashboard', app);
+describe('TemplateSourceResolver.parseHeaderRef', () => {
+  it('returns ExternalTemplateSource for a qualified "sourceName:templateName" ref', () => {
+    const app = { vault: { getFileByPath: vi.fn() } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    const result = resolver.parseHeaderRef('task-base:dashboard');
     expect(result).toBeInstanceOf(ExternalTemplateSource);
     expect((result as ExternalTemplateSource).sourceName).toBe('task-base');
     expect((result as ExternalTemplateSource).templateName).toBe('dashboard');
   });
 
-  it('returns a VaultTemplateSource for an unqualified path', () => {
-    const result = parseTemplateRef('Templates/board.yaml', app);
-    expect(result).toBeInstanceOf(VaultTemplateSource);
-    expect((result as VaultTemplateSource).path).toBe('Templates/board.yaml');
-  });
-
   it('splits on the first colon only, preserving rest as templateName', () => {
-    const result = parseTemplateRef('my-plugin:some:template', app);
+    const app = { vault: { getFileByPath: vi.fn() } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    const result = resolver.parseHeaderRef('my-plugin:some:template');
     expect(result).toBeInstanceOf(ExternalTemplateSource);
     expect((result as ExternalTemplateSource).sourceName).toBe('my-plugin');
     expect((result as ExternalTemplateSource).templateName).toBe('some:template');
+  });
+
+  it('returns VaultTemplateSource (with TFile) for an unqualified path when the file exists', () => {
+    const file = makeTFile('Templates/board.yaml');
+    const app = { vault: { getFileByPath: vi.fn().mockReturnValue(file) } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    const result = resolver.parseHeaderRef('Templates/board.yaml');
+    expect(result).toBeInstanceOf(VaultTemplateSource);
+    expect((result as VaultTemplateSource).file).toBe(file);
+  });
+
+  it('throws with a "file was moved?" message when the unqualified path is not found', () => {
+    const app = { vault: { getFileByPath: vi.fn().mockReturnValue(null) } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    expect(() => resolver.parseHeaderRef('Templates/missing.yaml'))
+      .toThrow('If you moved the file, update the path in pb-metadata.template');
+  });
+});
+
+describe('TemplateSourceResolver.parseSubRef', () => {
+  it('returns ExternalTemplateSource for a qualified "sourceName:key" ref', () => {
+    const app = { vault: { getFileByPath: vi.fn() } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    const result = resolver.parseSubRef('task-base:filter/isTask');
+    expect(result).toBeInstanceOf(ExternalTemplateSource);
+    expect((result as ExternalTemplateSource).sourceName).toBe('task-base');
+    expect((result as ExternalTemplateSource).templateName).toBe('filter/isTask');
+  });
+
+  it('returns VaultTemplateSource (with TFile) for an unqualified ref when the file exists', () => {
+    const file = makeTFile('components/filter/isTask.yaml');
+    const app = {
+      vault: { getFileByPath: vi.fn((p: string) => p === 'components/filter/isTask.yaml' ? file : null) },
+    } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    const result = resolver.parseSubRef('filter/isTask');
+    expect(result).toBeInstanceOf(VaultTemplateSource);
+    expect((result as VaultTemplateSource).file).toBe(file);
+  });
+
+  it('appends .yaml when the ref has no extension', () => {
+    const file = makeTFile('components/sub.yaml');
+    const getFileByPath = vi.fn((p: string) => p === 'components/sub.yaml' ? file : null);
+    const app = { vault: { getFileByPath } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    resolver.parseSubRef('sub');
+    expect(getFileByPath).toHaveBeenCalledWith('components/sub.yaml');
+  });
+
+  it('does not double-append .yaml when the ref already has it', () => {
+    const file = makeTFile('components/sub.yaml');
+    const getFileByPath = vi.fn((p: string) => p === 'components/sub.yaml' ? file : null);
+    const app = { vault: { getFileByPath } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    resolver.parseSubRef('sub.yaml');
+    expect(getFileByPath).toHaveBeenCalledWith('components/sub.yaml');
+  });
+
+  it('throws when the unqualified component file is not found', () => {
+    const app = { vault: { getFileByPath: vi.fn().mockReturnValue(null) } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    expect(() => resolver.parseSubRef('missing/component'))
+      .toThrow('Component not found: "missing/component"');
+  });
+
+  it('throws on path traversal attempts (..)', () => {
+    const app = { vault: { getFileByPath: vi.fn() } } as any;
+    const resolver = new TemplateSourceResolver(app, () => 'components');
+    expect(() => resolver.parseSubRef('../secret.yaml'))
+      .toThrow('Invalid !sub path: ../secret.yaml');
   });
 });

@@ -1,3 +1,5 @@
+// baseFileIO.ts
+
 import { App, TFile, normalizePath } from 'obsidian';
 import { BaseConfig } from 'bases/baseConfig';
 import { ViewRegistry } from 'views/viewRegistry';
@@ -11,12 +13,16 @@ import * as yaml from 'js-yaml';
  * the result for Obsidian's vault API. Intermediate directories are created
  * on demand before any write operation.
  */
-export class BaseFileManager {
+export class BaseFileIO {
   /**
    * @param app - The Obsidian app instance used for all vault operations.
-   * @param viewRegistry - Registry used to deserialize view configs when reading a base.
+   * @param getViewRegistry - Getter for the registry used to deserialize view configs when reading a base.
+   *   Passed as a getter so changes to the registry at runtime are picked up automatically.
    */
-  constructor(private readonly app: App, private readonly viewRegistry: ViewRegistry) {}
+  constructor(
+    private readonly app: App,
+    private readonly getViewRegistry: () => ViewRegistry,
+  ) {}
 
   /**
    * Reads an existing `.base` file and deserializes it into a {@link BaseConfig}.
@@ -30,14 +36,12 @@ export class BaseFileManager {
   async readBase(filePath: string): Promise<BaseConfig> {
     const resolvedPath = this.resolveFilePath(filePath);
 
-    // Resolve the TFile; throw early with a clear message rather than letting
-    // vault.read fail with a less informative error
     const file = this.app.vault.getFileByPath(resolvedPath);
     if (!file) throw new Error(`File not found: ${resolvedPath}`);
 
     const content = await this.app.vault.read(file);
     const raw = yaml.load(content) as Record<string, unknown>;
-    return BaseConfig.deserialize(raw, this.viewRegistry);
+    return BaseConfig.deserialize(raw, this.getViewRegistry());
   }
 
   /**
@@ -51,7 +55,6 @@ export class BaseFileManager {
   async createBase(config: BaseConfig, filePath: string): Promise<void> {
     const resolvedPath = this.resolveFilePath(filePath);
 
-    // Guard against accidentally overwriting an existing file
     const existingFile = this.app.vault.getAbstractFileByPath(resolvedPath);
     if (existingFile) {
         throw new Error(`File already exists at path: ${resolvedPath}`);
@@ -76,8 +79,6 @@ export class BaseFileManager {
 
     await this.ensureDirectoryExists(resolvedPath);
 
-    // vault.modify requires a TFile reference; fall back to create for any other
-    // case (file absent, or a TFolder somehow occupying the path)
     if (existingFile instanceof TFile) {
         await this.app.vault.modify(existingFile, yaml.dump(config.serialize(), { lineWidth: -1 }));
     } else {
@@ -85,47 +86,23 @@ export class BaseFileManager {
     }
   }
 
-  /**
-   * Resolves a caller-supplied path to the normalized vault path used for all
-   * vault API calls. Appends `.base` when the path has no extension, then
-   * normalizes separators via Obsidian's {@link normalizePath}.
-   *
-   * @param filePath - Raw path as supplied by the caller.
-   * @returns The normalized, extension-guaranteed vault path.
-   * @throws If `filePath` is empty or whitespace-only.
-   */
   private resolveFilePath(filePath: string): string {
     if (!filePath || !filePath.trim()) {
         throw new Error('File path must not be empty');
     }
 
-    // A dot anywhere after the last slash is treated as an extension delimiter;
-    // folder names containing dots (e.g. "v1.2/my-base") do not trigger this
     const hasExtension = /\.[^/\\]+$/.test(filePath);
     const pathWithExtension = hasExtension ? filePath : `${filePath}.base`;
     return normalizePath(pathWithExtension);
   }
 
-  /**
-   * Recursively ensures that all intermediate directories for `normalizedPath`
-   * exist, creating any that are missing in top-down order.
-   *
-   * The recursion walks up to the root before creating folders, so parent
-   * directories are always created before their children.
-   *
-   * @param normalizedPath - The fully normalized file path whose parent tree
-   *   should be guaranteed to exist.
-   * @throws If any `vault.createFolder` call fails (e.g. permission error).
-   */
   private async ensureDirectoryExists(normalizedPath: string): Promise<void> {
     const dirPath = normalizedPath.substring(0, normalizedPath.lastIndexOf('/'));
 
-    // Root-level file (no slash) or directory already present — nothing to do
     if (!dirPath || this.app.vault.getAbstractFileByPath(dirPath)) {
         return;
     }
 
-    // Ensure the parent exists before creating this directory
     await this.ensureDirectoryExists(dirPath);
     await this.app.vault.createFolder(dirPath);
   }

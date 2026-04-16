@@ -113,7 +113,7 @@ export class TemplatePicker extends SuggestModal<TemplateSource> {
    * @param source - The template source the user selected.
    */
   async onChooseSuggestion(source: TemplateSource) {
-    const harvested = await this.plugin.templateFileManager.readParamSpecsFromTemplate(source);
+    const harvested = await this.plugin.templateFileIO.readParamSpecsFromTemplate(source);
     new OutputPathModal(this.app, this.plugin, source, harvested).open();
   }
 }
@@ -330,8 +330,8 @@ export class OutputPathModal extends Modal {
       }
 
       await (overwrite
-        ? this.plugin.templateFileManager.writeBaseFromTemplate(this.template, this.outputPath, this.values)
-        : this.plugin.templateFileManager.createBaseFromTemplate(this.template, this.outputPath, this.values));
+        ? this.plugin.templateFileIO.writeBaseFromTemplate(this.template, this.outputPath, this.values)
+        : this.plugin.templateFileIO.createBaseFromTemplate(this.template, this.outputPath, this.values));
 
       new Notice(`${overwrite ? 'Overwrote' : 'Created'} ${this.outputPath}.base`);
       this.close();
