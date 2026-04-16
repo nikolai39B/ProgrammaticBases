@@ -2,29 +2,13 @@
 
 ## Status
 
-All 599 tests pass. Major implementation is complete.
-
-**Current work (in progress):** Architectural refactor of the file management layer.
-Plan fully designed — ready to implement. Plan file: `C:\Users\nikol\.claude\plans\goofy-gliding-blum.md`
+All 599 tests pass. File management layer refactor complete.
 
 ---
 
 ## Next steps
 
-### 1. Implement file management layer refactor (plan ready)
-
-See plan file for full detail. Summary of what changes:
-
-- **`templateSource.ts`** — add `TemplateSourceResolver` class (`parseHeaderRef` / `parseSubRef`); remove `parseTemplateRef` free function
-- **`vaultDeserializer.ts` → `templateEvaluator.ts`** — rename class to `TemplateEvaluator`; move all free functions to private methods; unify public API to `collectParams` / `evaluate`; remove `resolvedParams` from constructor
-- **`templateFileManager.ts` → `templateFileIO.ts`** — rename class to `TemplateFileIO`; constructor simplifies to 4 args (injected evaluator); rename `loadTemplate` → `evaluateTemplate`; add `writeBaseFromStoredRef` (reads cached params internally)
-- **`baseFileManager.ts` → `baseFileIO.ts`** — rename only, no functional changes
-- **`updateBaseFromTemplate.ts`** — fix bug (templateSource constructed but never passed on line 43); simplify to call `writeBaseFromStoredRef` with no params
-- **`main.ts`** — create `TemplateSourceResolver` + `TemplateEvaluator`; pass both to `TemplateFileIO`
-
-Also: custom tag review (`buildSchema` / `buildHarvestSchema`, `sourcePath` threading) happens naturally during the refactor as those functions become private methods.
-
-### 2. Interactive testing (after refactor)
+### 1. Interactive testing
 
 - Test full flow: pick template → param modal → create base
 - Test `!exp` / `!fnc` with params flowing through
@@ -32,13 +16,13 @@ Also: custom tag review (`buildSchema` / `buildHarvestSchema`, `sourcePath` thre
 - Test "Update base from template" re-applies stored params without re-prompting
 - Test external source templates (qualified `!sub` refs)
 
-### 3. `task-base` integration (deferred)
+### 2. `task-base` integration
 
 See "What Needs to Happen in `task-base`" section below.
 
 ---
 
-## Architecture (post-refactor)
+## Architecture
 
 ### Class responsibilities
 
@@ -75,6 +59,10 @@ interface ExternalSource {
 
 - **Pass 1** (`collectParams`): `!sub` resolved, `!exp`/`!fnc` no-ops, `pb-metadata.params` harvested from template + all components → `HarvestedParams` shown in modal
 - **Pass 2** (`evaluate`): full evaluation with user-supplied `ResolvedParams`, `pb-metadata` stripped, result stamped with `pb-metadata.template` (+ `pb-metadata.params` if non-empty)
+
+### Param scoping
+
+`ResolvedParams` uses `"sourcePath>paramName"` keys for component-scoped values, plain `"paramName"` for template-level. The modal fans merged values out to all relevant scoped keys before storing. `buildScopedParams` exposes only keys for the exact `sourcePath` — no cross-scope fallback.
 
 ### Settings
 

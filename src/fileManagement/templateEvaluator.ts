@@ -122,29 +122,22 @@ export class TemplateEvaluator {
     // Get the content
     const content = await this.resolveContent(source, isComponent);
 
-    // Read metadata.params with a permissive schema so any !sub/!exp/!fnc
-    // tags in the content block don't cause unknown-tag errors at this stage.
-    const noopTag = (name: string) => new yaml.Type(name, {
-      kind: 'scalar', resolve: () => true, construct: () => null,
-    }); // Note for claude: can we resolve !sub tags to promises at this stage to avoid having to double yaml.load?
-    const safeSchema = yaml.CORE_SCHEMA.extend([noopTag('!sub'), noopTag('!exp'), noopTag('!fnc')]);
+    // Parse once with the harvest schema. !sub construct callbacks return Promises
+    // (not yet awaited), so pb-metadata is fully available as a plain object right
+    // after yaml.load returns. We extract params before resolvePromises runs the
+    // !sub Promises — child component params merge during resolvePromises.
+    const schema = this.buildHarvestSchema(new Set([...visited, id]), discoveredParams, sourcePath);
+    const raw = yaml.load(content, { schema });
 
-    // Load the content as yaml
-    const rawOuter = yaml.load(content, { schema: safeSchema }) as Record<string, unknown> | null;
-
-    // If the yaml has a pb-metadata object, parse and merge the params into the tracking set
-    if (rawOuter && typeof rawOuter === 'object' && !Array.isArray(rawOuter)) {
-      const metaRaw = (rawOuter as Record<string, unknown>)['pb-metadata'];
+    // Extract pb-metadata.params synchronously, before resolvePromises awaits children
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const metaRaw = (raw as Record<string, unknown>)['pb-metadata'];
       if (metaRaw && typeof metaRaw === 'object' && !Array.isArray(metaRaw)) {
         const paramsRaw = (metaRaw as Record<string, unknown>)['params'];
         const specs: ParamSpecs = parseParamSpecs(paramsRaw);
         mergeHarvestedParams(discoveredParams, specs, sourcePath);
       }
     }
-
-    // Re-parse the yaml, this time resolving !sub tags only to collect their params
-    const schema = this.buildHarvestSchema(new Set([...visited, id]), discoveredParams, sourcePath);
-    const raw = yaml.load(content, { schema });
     return this.resolvePromises(this.unwrapContent(raw));
   }
 

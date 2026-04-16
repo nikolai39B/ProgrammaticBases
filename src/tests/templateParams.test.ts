@@ -106,17 +106,9 @@ describe('buildScopedParams', () => {
     expect(buildScopedParams(resolved, 'view/focused')).toEqual({ taskLocation: 'Tasks' });
   });
 
-  it('source-scoped key overrides template-level fallback', () => {
-    const resolved = {
-      taskLocation: 'Default',
-      'view/focused>taskLocation': 'Override',
-    };
-    expect(buildScopedParams(resolved, 'view/focused')).toEqual({ taskLocation: 'Override' });
-  });
-
-  it('falls back to template-level key when no source-scoped key exists', () => {
-    const resolved = { taskLocation: 'Fallback' };
-    expect(buildScopedParams(resolved, 'view/focused')).toEqual({ taskLocation: 'Fallback' });
+  it('ignores template-level keys when sourcePath is non-empty', () => {
+    const resolved = { 'view/focused>taskLocation': 'Scoped', taskLocation: 'TopLevel' };
+    expect(buildScopedParams(resolved, 'view/focused')).toEqual({ taskLocation: 'Scoped' });
   });
 
   it('ignores keys from a different source path', () => {

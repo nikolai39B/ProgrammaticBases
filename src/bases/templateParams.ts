@@ -56,19 +56,34 @@ export type HarvestedParams = Record<string, HarvestedParam>;
  */
 export type ResolvedParams = Record<string, ParamValue>;
 
+/** Returns a type-safe default value for a param, or `undefined` if the raw
+ *  value doesn't match the expected JS type. Booleans are always coerced
+ *  (so an absent default becomes `false`). */
+function coerceDefault(type: ParamType, value: unknown): ParamValue | undefined {
+  if (type === 'boolean') return Boolean(value);
+  if (type === 'number') return typeof value === 'number' ? value : undefined;
+  return typeof value === 'string' ? value : undefined;
+}
+
 /**
  * Parses a raw `metadata.params` YAML value into a typed `ParamSpecs` map.
  * Returns `{}` for null, undefined, or non-object input.
  * Unknown `type` values coerce to `'string'`.
  */
 export function parseParamSpecs(raw: unknown): ParamSpecs {
+  // Skip non-objects
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+
+  // Parse all the params
   const result: ParamSpecs = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    // Break early if the value is not an object - unexpected
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       result[key] = {};
       continue;
     }
+
+    // Get the value type
     const v = value as Record<string, unknown>;
     const rawType = v['type'];
     const type: ParamType =
@@ -76,16 +91,15 @@ export function parseParamSpecs(raw: unknown): ParamSpecs {
       rawType === 'number' || rawType === 'date' || rawType === 'datetime'
         ? (rawType as ParamType)
         : 'string';
+
+    // Get the param's default value
     const defaultValue = v['default'];
+
+    // Construct the full value object
     result[key] = {
       label: typeof v['label'] === 'string' ? v['label'] : undefined,
       type,
-      default:
-        type === 'boolean'
-          ? Boolean(defaultValue)
-          : type === 'number'
-            ? (typeof defaultValue === 'number' ? defaultValue : undefined)
-            : (typeof defaultValue === 'string' ? defaultValue : undefined),
+      default: coerceDefault(type, defaultValue),
     };
   }
   return result;
@@ -113,34 +127,31 @@ export function mergeHarvestedParams(
 
 /**
  * Builds the `params` object passed to `!exp`/`!fnc` when evaluating
- * nodes inside a component at `sourcePath`.
+ * nodes at `sourcePath`.
  *
- * Looks up `"sourcePath>paramName"` keys first; falls back to plain
- * `"paramName"` template-level keys. This lets components always
- * reference `params.taskLocation` regardless of scoping.
+ * At template level (`sourcePath` is empty): exposes plain unprefixed keys.
+ * Inside a component: exposes only keys scoped to that exact path,
+ * stripped of the `"sourcePath>"` prefix.
+ *
+ * The modal fans values out to all relevant scoped keys before storing
+ * them, so no cross-scope fallback is needed here.
  */
 export function buildScopedParams(
   resolved: ResolvedParams,
   sourcePath: string,
 ): Record<string, ParamValue> {
-  const prefix = sourcePath ? `${sourcePath}>` : '';
-  const result: Record<string, ParamValue> = {};
+  const entries = Object.entries(resolved);
 
-  // First pass: collect template-level (unprefixed) values as fallbacks
-  for (const [key, value] of Object.entries(resolved)) {
-    if (!key.includes('>')) {
-      result[key] = value;
-    }
+  // Handle base parameters
+  if (!sourcePath) {
+    return Object.fromEntries(entries.filter(([k]) => !k.includes('>')));
   }
 
-  // Second pass: source-scoped values override fallbacks
-  if (prefix) {
-    for (const [key, value] of Object.entries(resolved)) {
-      if (key.startsWith(prefix)) {
-        result[key.slice(prefix.length)] = value;
-      }
-    }
-  }
-
-  return result;
+  // Handle component parameters
+  const prefix = `${sourcePath}>`;
+  return Object.fromEntries(
+    entries
+      .filter(([k]) => k.startsWith(prefix))
+      .map(([k, v]) => [k.slice(prefix.length), v])
+  );
 }
