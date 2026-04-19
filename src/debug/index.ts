@@ -1,7 +1,6 @@
-import * as fs from 'fs';
 import * as yaml from 'js-yaml';
-import * as path from 'path';
 import ProgrammaticBases from 'main';
+import { registerDebugSource } from 'debug/debugSource';
 import { BaseConfig } from 'bases/baseConfig';
 import { BaseBuilder } from 'bases/baseBuilder';
 import { FilterGroup } from 'primitives/filter';
@@ -96,6 +95,8 @@ export default class DebugUtils {
     //console.log(yaml.load(yaml.dump(Object.entries(v), { lineWidth: -1 })));
   }
   
+  static registerDebugSource = registerDebugSource;
+
   static async testJsYamlLoad() {
     
     const path = "Bases\\testBase.base";

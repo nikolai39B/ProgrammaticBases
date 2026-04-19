@@ -32,33 +32,84 @@ describe('parseParamSpecs', () => {
       .toEqual({ count: { label: undefined, type: 'number', default: 42 } });
   });
 
+  it('parses min and max on a number spec', () => {
+    expect(parseParamSpecs({ count: { type: 'number', min: 0, max: 100 } }))
+      .toMatchObject({ count: { type: 'number', min: 0, max: 100 } });
+  });
+
+  it('omits min/max when they are not numbers', () => {
+    const result = parseParamSpecs({ count: { type: 'number', min: 'low', max: true } });
+    expect(result.count).not.toHaveProperty('min');
+    expect(result.count).not.toHaveProperty('max');
+  });
+
+  it('parses partial number constraints', () => {
+    const result = parseParamSpecs({ count: { type: 'number', min: 1 } });
+    expect(result.count).toMatchObject({ type: 'number', min: 1 });
+    expect(result.count).not.toHaveProperty('max');
+  });
+
   it('parses folder, date, datetime types', () => {
     const result = parseParamSpecs({
       f: { type: 'folder' },
       d: { type: 'date' },
       dt: { type: 'datetime' },
     });
-    expect(result.f.type).toBe('folder');
-    expect(result.d.type).toBe('date');
-    expect(result.dt.type).toBe('datetime');
+    expect(result.f!.type).toBe('folder');
+    expect(result.d!.type).toBe('date');
+    expect(result.dt!.type).toBe('datetime');
   });
 
-  it('coerces unknown type to "string"', () => {
-    const result = parseParamSpecs({ x: { type: 'unknown' } });
-    expect(result.x.type).toBe('string');
+  it('throws on unknown type', () => {
+    expect(() => parseParamSpecs({ x: { type: 'unknown' } })).toThrow('Unknown param type: unknown');
   });
 
-  it('treats a non-object entry value as an empty spec', () => {
-    expect(parseParamSpecs({ x: 'not an object' })).toEqual({ x: {} });
+  it('throws when type is absent', () => {
+    expect(() => parseParamSpecs({ x: { label: 123 } })).toThrow('Unknown param type: undefined');
   });
 
-  it('omits label when it is not a string', () => {
-    expect(parseParamSpecs({ x: { label: 123 } })).toMatchObject({ x: { label: undefined } });
+  it('treats a non-object entry value as a plain string spec', () => {
+    expect(parseParamSpecs({ x: 'not an object' })).toMatchObject({ x: { type: 'string' } });
+  });
+
+  it('parses optional: true', () => {
+    expect(parseParamSpecs({ x: { type: 'string', optional: true } }))
+      .toMatchObject({ x: { optional: true } });
+  });
+
+  it('leaves optional undefined when not explicitly true', () => {
+    const result = parseParamSpecs({ x: { type: 'string' } });
+    expect(result.x?.optional).toBeUndefined();
   });
 
   it('omits number default when it is not a number', () => {
     expect(parseParamSpecs({ x: { type: 'number', default: 'not a number' } }))
       .toMatchObject({ x: { default: undefined } });
+  });
+
+  it('parses an enum spec with options', () => {
+    expect(parseParamSpecs({ dir: { type: 'enum', options: ['ASC', 'DESC'], default: 'ASC' } }))
+      .toEqual({ dir: { label: undefined, type: 'enum', options: ['ASC', 'DESC'], default: 'ASC' } });
+  });
+
+  it('parses an enum spec with no default', () => {
+    expect(parseParamSpecs({ dir: { type: 'enum', options: ['ASC', 'DESC'] } }))
+      .toMatchObject({ dir: { type: 'enum', options: ['ASC', 'DESC'], default: undefined } });
+  });
+
+  it('filters non-string values from enum options', () => {
+    const result = parseParamSpecs({ dir: { type: 'enum', options: ['ASC', 42, null, 'DESC'] } });
+    expect(result.dir).toMatchObject({ type: 'enum', options: ['ASC', 'DESC'] });
+  });
+
+  it('parses an enum spec with an empty options array', () => {
+    expect(parseParamSpecs({ dir: { type: 'enum', options: [] } }))
+      .toMatchObject({ dir: { type: 'enum', options: [] } });
+  });
+
+  it('parses an enum spec with a non-array options value as empty', () => {
+    const result = parseParamSpecs({ dir: { type: 'enum', options: 'ASC' } });
+    expect(result.dir).toMatchObject({ type: 'enum', options: [] });
   });
 });
 
@@ -68,28 +119,28 @@ describe('mergeHarvestedParams', () => {
   it('adds a new param with the given source path', () => {
     const into: HarvestedParams = {};
     mergeHarvestedParams(into, { x: { type: 'string' } }, 'view/focused');
-    expect(into.x.sources).toEqual(['view/focused']);
-    expect(into.x.spec.type).toBe('string');
+    expect(Object.keys(into.x!.specs)).toEqual(['view/focused']);
+    expect(into.x!.specs['view/focused']!.type).toBe('string');
   });
 
-  it('accumulates sources for same-named params', () => {
+  it('stores each source\'s spec independently for same-named params', () => {
     const into: HarvestedParams = {};
     mergeHarvestedParams(into, { x: { type: 'string' } }, 'view/focused');
     mergeHarvestedParams(into, { x: { type: 'folder' } }, 'filter/inThisFolder');
-    expect(into.x.sources).toEqual(['view/focused', 'filter/inThisFolder']);
-    // Keeps the spec from the first declaration
-    expect(into.x.spec.type).toBe('string');
+    expect(Object.keys(into.x!.specs)).toEqual(['view/focused', 'filter/inThisFolder']);
+    expect(into.x!.specs['view/focused']!.type).toBe('string');
+    expect(into.x!.specs['filter/inThisFolder']!.type).toBe('folder');
   });
 
   it('handles template-level source path (empty string)', () => {
     const into: HarvestedParams = {};
-    mergeHarvestedParams(into, { x: { label: 'X' } }, '');
-    expect(into.x.sources).toEqual(['']);
+    mergeHarvestedParams(into, { x: { type: 'string', label: 'X' } }, '');
+    expect(Object.keys(into.x!.specs)).toEqual(['']);
   });
 
   it('adds multiple distinct params independently', () => {
     const into: HarvestedParams = {};
-    mergeHarvestedParams(into, { a: {}, b: {} }, 'comp');
+    mergeHarvestedParams(into, { a: { type: 'string' }, b: { type: 'string' } }, 'comp');
     expect(Object.keys(into)).toEqual(['a', 'b']);
   });
 });

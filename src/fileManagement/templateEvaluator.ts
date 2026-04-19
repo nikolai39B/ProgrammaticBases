@@ -3,6 +3,8 @@
 import * as yaml from 'js-yaml';
 import { App } from 'obsidian';
 import { ExternalSource } from 'settings';
+import { BaseBuilder } from 'bases/baseBuilder';
+import { BaseConfig } from 'bases/baseConfig';
 import {
   HarvestedParams,
   ParamSpecs,
@@ -17,6 +19,7 @@ import {
   TemplateSourceResolver,
   VaultTemplateSource,
 } from 'bases/templateSource';
+import { ViewRegistry } from 'views/viewRegistry';
 
 /**
  * Evaluates YAML template strings with custom tag resolution (`!sub`, `!exp`, `!fnc`).
@@ -41,6 +44,7 @@ export class TemplateEvaluator {
     private readonly app: App,
     private readonly resolver: TemplateSourceResolver,
     private readonly getSources: () => Map<string, ExternalSource>,
+    private readonly getViewRegistry: () => ViewRegistry,
   ) {}
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -59,15 +63,30 @@ export class TemplateEvaluator {
   }
 
   /**
-   * Pass 2: evaluates the template, resolving `!sub` and evaluating `!exp`/`!fnc`
-   * against the supplied `resolvedParams`.
+   * Pass 2: evaluates a template into a fully-resolved {@link BaseConfig},
+   * stamping `pb-metadata.template` (and optionally `pb-metadata.params`).
+   *
+   * This is a pure transformation — no files are written. Callers that also
+   * need to write a `.base` file should use {@link TemplateFileIO} instead.
    *
    * @param source - The template source to evaluate.
    * @param resolvedParams - Flat param map from the modal or stored in `pb-metadata`.
-   * @returns The fully resolved plain-object tree (pb-metadata stripped).
+   * @returns A fully built {@link BaseConfig} with metadata stamped.
    */
-  async evaluate(source: TemplateSource, resolvedParams: ResolvedParams = {}): Promise<unknown> {
-    return this.evaluateResolved(source, new Set(), resolvedParams, '', false);
+  async evaluateTemplate(
+    source: TemplateSource,
+    resolvedParams: ResolvedParams = {},
+  ): Promise<BaseConfig> {
+    const raw = await this.evaluateResolved(source, new Set(), resolvedParams, '', false);
+    const registry = this.getViewRegistry();
+    const config = BaseConfig.deserialize(raw as Record<string, unknown>, registry);
+    const hasParams = Object.keys(resolvedParams).length > 0;
+    return new BaseBuilder(config, registry)
+      .setMetadata({
+        template: source.toRef(),
+        ...(hasParams ? { params: resolvedParams } : {}),
+      })
+      .build();
   }
 
   // ── Content resolution ──────────────────────────────────────────────────────

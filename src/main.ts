@@ -31,6 +31,10 @@ export default class ProgrammaticBases extends Plugin {
   private _baseFileIO: BaseFileIO;
   get baseFileIO(): BaseFileIO { return this._baseFileIO; }
 
+  // Template evaluator
+  private _templateEvaluator: TemplateEvaluator;
+  get templateEvaluator(): TemplateEvaluator { return this._templateEvaluator; }
+
   // Template file I/O
   private _templateFileIO: TemplateFileIO;
   get templateFileIO(): TemplateFileIO { return this._templateFileIO; }
@@ -84,13 +88,12 @@ export default class ProgrammaticBases extends Plugin {
 
       // Create the file management layer
       const resolver = new TemplateSourceResolver(this.app, () => this.componentsFolder);
-      const evaluator = new TemplateEvaluator(this.app, resolver, () => this.allSources);
+      this._templateEvaluator = new TemplateEvaluator(this.app, resolver, () => this.allSources, () => this._viewRegistry);
       this._baseFileIO = new BaseFileIO(this.app, () => this._viewRegistry);
       this._templateFileIO = new TemplateFileIO(
         this._baseFileIO,
-        () => this._viewRegistry,
         resolver,
-        evaluator,
+        this._templateEvaluator,
       );
 
       // Register commands

@@ -5,7 +5,7 @@ import { TFile, TFolder, Modal, SuggestModal, Notice } from 'obsidian';
 import {
   createBaseFromTemplateCommand,
   TemplatePicker,
-  OutputPathModal,
+  TemplateConfigurationModal,
   ConfirmOverwriteModal,
 } from '../commands/createBaseFromTemplate';
 import { VaultTemplateSource, ExternalTemplateSource } from 'bases/templateSource';
@@ -62,8 +62,11 @@ function makePlugin(overrides: {
     getActiveFile: vi.fn().mockReturnValue(activeFile),
   };
 
+  const templateEvaluator = {
+    collectParams: vi.fn().mockResolvedValue({}),
+  };
+
   const templateFileIO = {
-    readParamSpecsFromTemplate: vi.fn().mockResolvedValue({}),
     createBaseFromTemplate: vi.fn().mockResolvedValue(undefined),
     writeBaseFromTemplate: vi.fn().mockResolvedValue(undefined),
   };
@@ -74,6 +77,7 @@ function makePlugin(overrides: {
     allSources,
     componentsFolder: 'Templates/components',
     viewRegistry: {} as any,
+    templateEvaluator,
     templateFileIO,
   } as any;
 }
@@ -194,32 +198,32 @@ describe('TemplatePicker', () => {
   });
 
   describe('onChooseSuggestion()', () => {
-    it('opens OutputPathModal when the template has no params', async () => {
-      plugin.templateFileIO.readParamSpecsFromTemplate.mockResolvedValue({});
+    it('opens TemplateConfigurationModal when the template has no params', async () => {
+      plugin.templateEvaluator.collectParams.mockResolvedValue({});
       const openSpy = vi.spyOn(Modal.prototype, 'open');
       const picker = new TemplatePicker(plugin.app, plugin);
       await picker.onChooseSuggestion(makeVaultTemplate(makeTFile()));
       expect(openSpy).toHaveBeenCalledOnce();
-      expect(openSpy.mock.contexts[0]).toBeInstanceOf(OutputPathModal);
+      expect(openSpy.mock.contexts[0]).toBeInstanceOf(TemplateConfigurationModal);
     });
 
-    it('opens OutputPathModal when the template has params', async () => {
+    it('opens TemplateConfigurationModal when the template has params', async () => {
       const harvested: HarvestedParams = {
-        taskLocation: { spec: { type: 'folder' }, sources: [''] },
+        taskLocation: { specs: { '': { type: 'folder' } } },
       };
-      plugin.templateFileIO.readParamSpecsFromTemplate.mockResolvedValue(harvested);
+      plugin.templateEvaluator.collectParams.mockResolvedValue(harvested);
       const openSpy = vi.spyOn(Modal.prototype, 'open');
       const picker = new TemplatePicker(plugin.app, plugin);
       await picker.onChooseSuggestion(makeVaultTemplate(makeTFile()));
       expect(openSpy).toHaveBeenCalledOnce();
-      expect(openSpy.mock.contexts[0]).toBeInstanceOf(OutputPathModal);
+      expect(openSpy.mock.contexts[0]).toBeInstanceOf(TemplateConfigurationModal);
     });
   });
 });
 
-// ── OutputPathModal ───────────────────────────────────────────────────────────
+// ── TemplateConfigurationModal ───────────────────────────────────────────────────────────
 
-describe('OutputPathModal', () => {
+describe('TemplateConfigurationModal', () => {
   let plugin: ReturnType<typeof makePlugin>;
   const templateFile = makeTFile('my-template');
   const template = makeVaultTemplate(templateFile);
@@ -233,7 +237,7 @@ describe('OutputPathModal', () => {
 
   describe('onClose()', () => {
     it('empties contentEl', () => {
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       modal.onClose();
       expect(modal.contentEl.empty).toHaveBeenCalledOnce();
     });
@@ -245,14 +249,14 @@ describe('OutputPathModal', () => {
     it('defaults outputFolder to activeFile parent path and outputName to template basename', () => {
       const activeFile = Object.assign(new TFile(), { parent: { path: 'Notes/Daily' } });
       plugin.app.workspace.getActiveFile.mockReturnValue(activeFile);
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       expect((modal as any).outputFolder).toBe('Notes/Daily');
       expect((modal as any).outputName).toBe('my-template');
     });
 
     it('uses empty folder and template basename when there is no active file', () => {
       plugin.app.workspace.getActiveFile.mockReturnValue(null);
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       expect((modal as any).outputFolder).toBe('');
       expect((modal as any).outputName).toBe('my-template');
     });
@@ -260,42 +264,50 @@ describe('OutputPathModal', () => {
     it('uses empty folder when the active file has no parent', () => {
       const activeFile = Object.assign(new TFile(), { parent: null });
       plugin.app.workspace.getActiveFile.mockReturnValue(activeFile);
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       expect((modal as any).outputFolder).toBe('');
       expect((modal as any).outputName).toBe('my-template');
     });
 
     it('uses templateName as the file name for plugin templates', () => {
       const pluginTemplate = new ExternalTemplateSource('my-plugin', 'dashboard');
-      const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, pluginTemplate, {});
       expect((modal as any).outputName).toBe('dashboard');
     });
 
     it('pre-fills a string default into values at the template-level key', () => {
       const harvested: HarvestedParams = {
-        taskLocation: { spec: { type: 'string', default: 'Tasks' }, sources: [''] },
+        taskLocation: { specs: { '': { type: 'string', default: 'Tasks' } } },
       };
-      const modal = new OutputPathModal(plugin.app, plugin, template, harvested);
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
       expect((modal as any).values['taskLocation']).toBe('Tasks');
     });
 
     it('pre-fills boolean false when type is boolean and no default given', () => {
       const harvested: HarvestedParams = {
-        flag: { spec: { type: 'boolean' }, sources: [''] },
+        flag: { specs: { '': { type: 'boolean' } } },
       };
-      const modal = new OutputPathModal(plugin.app, plugin, template, harvested);
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
       expect((modal as any).values['flag']).toBe(false);
     });
 
-    it('fans out a merged param default to all source-scoped keys and a plain key', () => {
+    it('pre-fills default into each source-scoped key', () => {
       const harvested: HarvestedParams = {
-        x: { spec: { type: 'string', default: 'hello' }, sources: ['a', 'b'] },
+        x: { specs: { 'a': { type: 'string', default: 'hello' }, 'b': { type: 'string', default: 'hello' } } },
       };
-      const modal = new OutputPathModal(plugin.app, plugin, template, harvested);
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
       const vals = (modal as any).values as ResolvedParams;
       expect(vals['a>x']).toBe('hello');
       expect(vals['b>x']).toBe('hello');
-      expect(vals['x']).toBe('hello');
+      expect(vals['x']).toBeUndefined();
+    });
+
+    it('pre-fills default into a plain key for template-level params', () => {
+      const harvested: HarvestedParams = {
+        x: { specs: { '': { type: 'string', default: 'hello' } } },
+      };
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
+      expect((modal as any).values['x']).toBe('hello');
     });
   });
 
@@ -304,7 +316,7 @@ describe('OutputPathModal', () => {
   describe('create()', () => {
     it('calls templateFileManager.createBaseFromTemplate with the template, output path, and values', async () => {
       const resolvedParams: ResolvedParams = { taskLocation: 'Tasks' };
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       (modal as any).values = resolvedParams;
       await (modal as any).create();
       expect(plugin.templateFileIO.createBaseFromTemplate).toHaveBeenCalledWith(template, 'my-template', resolvedParams);
@@ -312,14 +324,14 @@ describe('OutputPathModal', () => {
 
     it('calls templateFileManager.createBaseFromTemplate for plugin templates', async () => {
       const pluginTemplate = new ExternalTemplateSource('my-plugin', 'dashboard');
-      const modal = new OutputPathModal(plugin.app, plugin, pluginTemplate, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, pluginTemplate, {});
       await (modal as any).create();
       expect(plugin.templateFileIO.createBaseFromTemplate).toHaveBeenCalledWith(pluginTemplate, 'dashboard', {});
     });
 
     it('calls templateFileManager.writeBaseFromTemplate and not createBaseFromTemplate when overwrite=true', async () => {
       const resolvedParams: ResolvedParams = { x: 'val' };
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       (modal as any).values = resolvedParams;
       await (modal as any).create(true);
       expect(plugin.templateFileIO.writeBaseFromTemplate).toHaveBeenCalledWith(template, 'my-template', resolvedParams);
@@ -329,40 +341,40 @@ describe('OutputPathModal', () => {
     it('opens a ConfirmOverwriteModal and does not call createBaseFromTemplate when file exists', async () => {
       plugin.app.vault.getAbstractFileByPath.mockReturnValue({} /* existing file */);
       const openSpy = vi.spyOn(Modal.prototype, 'open');
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       await (modal as any).create(false);
       expect(openSpy).toHaveBeenCalledOnce();
       expect(plugin.templateFileIO.createBaseFromTemplate).not.toHaveBeenCalled();
     });
 
     it('shows a Notice containing "Created" after a successful createBaseFromTemplate', async () => {
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       await (modal as any).create();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Created'));
     });
 
     it('shows a Notice containing "Overwrote" after a successful writeBaseFromTemplate', async () => {
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       await (modal as any).create(true);
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Overwrote'));
     });
 
     it('calls close() after a successful create', async () => {
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       const closeSpy = vi.spyOn(modal, 'close');
       await (modal as any).create();
       expect(closeSpy).toHaveBeenCalledOnce();
     });
 
     it('calls close() after a successful overwrite', async () => {
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       const closeSpy = vi.spyOn(modal, 'close');
       await (modal as any).create(true);
       expect(closeSpy).toHaveBeenCalledOnce();
     });
 
     it('does not append .base when the combined path already has an extension', async () => {
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       (modal as any).outputFolder = '';
       (modal as any).outputName = 'my-file.base';
       await (modal as any).create();
@@ -370,7 +382,7 @@ describe('OutputPathModal', () => {
     });
 
     it('appends .base for the existence check when the combined path has no extension', async () => {
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       (modal as any).outputFolder = '';
       (modal as any).outputName = 'my-file';
       await (modal as any).create();
@@ -379,14 +391,14 @@ describe('OutputPathModal', () => {
 
     it('shows an error Notice when templateFileManager.createBaseFromTemplate throws', async () => {
       plugin.templateFileIO.createBaseFromTemplate.mockRejectedValue(new Error('YAML parse error'));
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       await (modal as any).create();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('YAML parse error'), 0);
     });
 
     it('shows an error Notice when templateFileManager.writeBaseFromTemplate throws and does not rethrow', async () => {
       plugin.templateFileIO.writeBaseFromTemplate.mockRejectedValue(new Error('Disk full'));
-      const modal = new OutputPathModal(plugin.app, plugin, template, {});
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       await expect((modal as any).create(true)).resolves.not.toThrow();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Disk full'), 0);
     });

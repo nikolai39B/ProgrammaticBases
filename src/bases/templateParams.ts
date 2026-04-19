@@ -1,42 +1,54 @@
 // templateParams.ts
 
-/**
- * Valid types for a template parameter. Determines the input control
- * rendered in the param collection modal.
- */
-export type ParamType = 'string' | 'boolean' | 'folder' | 'number' | 'date' | 'datetime';
-
 /** A single runtime param value. */
 export type ParamValue = string | boolean | number;
 
-/**
- * Declaration of a single parameter as written in a template's or
- * component's `metadata.params` block.
- */
-export interface ParamSpec {
+interface BaseParamSpec {
   /** Display label shown in the modal. Falls back to the param key if absent. */
   label?: string;
-  /** Input type. Defaults to `'string'` for unknown or absent values. */
-  type?: ParamType;
+  /** Helper text shown below the input in the modal. */
+  description?: string;
   /** Pre-filled default value shown in the modal. */
   default?: ParamValue;
+  /**
+   * When `true`, the field may be left blank. Absent or `false` means the
+   * field is required — the modal will not advance until it is filled.
+   */
+  optional?: boolean;
+}
+
+/**
+ * Declaration of a single parameter as written in a template's or
+ * component's `metadata.params` block. Discriminated by `type`.
+ */
+export type ParamSpec =
+  | (BaseParamSpec & { type: 'string' })
+  | (BaseParamSpec & { type: 'boolean' })
+  | (BaseParamSpec & { type: 'folder' })
+  | (BaseParamSpec & { type: 'date' })
+  | (BaseParamSpec & { type: 'datetime' })
+  | (BaseParamSpec & { type: 'number'; min?: number; max?: number })
+  | (BaseParamSpec & { type: 'enum'; options: string[] });
+
+/** All valid param type names. Single source of truth for both the type and runtime checks. */
+export const PARAM_TYPES = ['string', 'boolean', 'folder', 'date', 'datetime', 'number', 'enum'] as const;
+export type ParamType = (typeof PARAM_TYPES)[number];
+
+/** Returns true if `value` is a recognised `ParamType`. */
+export function isParamType(value: unknown): value is ParamType {
+  return (PARAM_TYPES as readonly string[]).includes(value as string);
 }
 
 /** Map of param name → spec, as declared in `metadata.params`. */
 export type ParamSpecs = Record<string, ParamSpec>;
 
 /**
- * A harvested param entry — the merged spec and the source paths of
- * every component that declared this param name.
+ * A harvested param entry — every source's full spec, keyed by source path.
+ * `""` is the template-level source; component paths are used for nested sources.
+ * Insertion order mirrors discovery order.
  */
 export interface HarvestedParam {
-  spec: ParamSpec;
-  /**
-   * Source paths of every component that declared this param.
-   * E.g. `["view/focused", "view/focused > filter/inThisFolder"]`.
-   * Template-level params use an empty string `""` as their source.
-   */
-  sources: string[];
+  specs: Record<string, ParamSpec>;
 }
 
 /**
@@ -77,39 +89,51 @@ export function parseParamSpecs(raw: unknown): ParamSpecs {
   // Parse all the params
   const result: ParamSpecs = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    // Break early if the value is not an object - unexpected
+    // Fall back to a plain string spec for non-object entry values
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      result[key] = {};
+      result[key] = { type: 'string' };
       continue;
     }
 
     // Get the value type
     const v = value as Record<string, unknown>;
     const rawType = v['type'];
-    const type: ParamType =
-      rawType === 'boolean' || rawType === 'folder' ||
-      rawType === 'number' || rawType === 'date' || rawType === 'datetime'
-        ? (rawType as ParamType)
-        : 'string';
+    if (!isParamType(rawType)) throw new Error(`Unknown param type: ${String(rawType)}`);
+    const type = rawType;
 
-    // Get the param's default value
-    const defaultValue = v['default'];
-
-    // Construct the full value object
-    result[key] = {
+    // Shared base fields
+    const base: BaseParamSpec = {
       label: typeof v['label'] === 'string' ? v['label'] : undefined,
-      type,
-      default: coerceDefault(type, defaultValue),
+      description: typeof v['description'] === 'string' ? v['description'] : undefined,
+      default: coerceDefault(type, v['default']),
+      optional: v['optional'] === true ? true : undefined,
     };
+
+    if (type === 'number') {
+      result[key] = {
+        ...base,
+        type,
+        ...(typeof v['min'] === 'number' ? { min: v['min'] } : {}),
+        ...(typeof v['max'] === 'number' ? { max: v['max'] } : {}),
+      };
+    } else if (type === 'enum') {
+      const rawOptions = v['options'];
+      const options = Array.isArray(rawOptions)
+        ? rawOptions.filter((o): o is string => typeof o === 'string')
+        : [];
+      result[key] = { ...base, type, options };
+    } else {
+      result[key] = { ...base, type };
+    }
   }
   return result;
 }
 
 /**
- * Merges `specs` (from a component at `sourcePath`) into the running
- * `HarvestedParams` map. For params already present, the spec is
- * kept from the first declaration and `sourcePath` is appended to
- * the sources list.
+ * Records `specs` (from a source at `sourcePath`) into the running
+ * `HarvestedParams` map. Each source's spec is stored independently
+ * under its source path, preserving per-source labels, descriptions,
+ * defaults, and types.
  */
 export function mergeHarvestedParams(
   into: HarvestedParams,
@@ -117,11 +141,10 @@ export function mergeHarvestedParams(
   sourcePath: string,
 ): void {
   for (const [name, spec] of Object.entries(specs)) {
-    if (into[name]) {
-      into[name].sources.push(sourcePath);
-    } else {
-      into[name] = { spec, sources: [sourcePath] };
+    if (!into[name]) {
+      into[name] = { specs: {} };
     }
+    into[name]!.specs[sourcePath] = spec;
   }
 }
 

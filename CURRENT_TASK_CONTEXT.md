@@ -2,21 +2,31 @@
 
 ## Status
 
-All 599 tests pass. File management layer refactor complete.
+All 596 tests pass. File management layer refactor complete. `TemplateConfigurationModal` is multi-page (one page per param source, output location last).
 
 ---
 
 ## Next steps
 
-### 1. Interactive testing
+### 1. `TemplateConfigurationModal` UI gaps
+
+- **date / datetime inputs** — currently render as plain text; should use `<input type="date">` / `<input type="datetime-local">`
+- **number inputs** — no `min` / `max` / `step` support in `ParamSpec`; also renders as text
+- **description / hint text** — `description` field exists on `ParamSpec` but is not displayed under fields
+- **required / validation** — submitting with empty required fields gives no feedback
+- **select / enum type** — no dropdown option for fixed-choice params; needs new type in `ParamSpec`
+- **Split UX** — after splitting, labels show raw source paths (e.g. `view/focused > filter/inThisFolder`), which is noisy; needs friendlier display
+- **Visual grouping** — flat param list within a page has no section breaks; component-sourced params could be grouped visually
+
+### 2. Interactive testing
 
 - Test full flow: pick template → param modal → create base
 - Test `!exp` / `!fnc` with params flowing through
-- Test nested component params appearing in modal with correct source paths
+- Test nested component params appearing on separate pages with correct source paths
 - Test "Update base from template" re-applies stored params without re-prompting
 - Test external source templates (qualified `!sub` refs)
 
-### 2. `task-base` integration
+### 3. `task-base` integration
 
 See "What Needs to Happen in `task-base`" section below.
 
@@ -29,8 +39,8 @@ See "What Needs to Happen in `task-base`" section below.
 | Class | File | Responsibility |
 |---|---|---|
 | `TemplateSourceResolver` | `templateSource.ts` | Parses all ref formats; validates vault paths; single authoritative place for format 1 vs 2 distinction |
-| `TemplateEvaluator` | `templateEvaluator.ts` | Evaluates YAML templates — resolves `!sub`/`!exp`/`!fnc` tags in two passes; all logic in private methods |
-| `TemplateFileIO` | `templateFileIO.ts` | Orchestrates template → BaseConfig pipeline; stamps `pb-metadata`; delegates writes to `BaseFileIO` |
+| `TemplateEvaluator` | `templateEvaluator.ts` | Evaluates YAML templates — resolves `!sub`/`!exp`/`!fnc` tags in two passes; stamps `pb-metadata`; all logic in private methods |
+| `TemplateFileIO` | `templateFileIO.ts` | Orchestrates template → `.base` file pipeline; delegates evaluation to `TemplateEvaluator` and writes to `BaseFileIO` |
 | `BaseFileIO` | `baseFileIO.ts` | Read/create/write `.base` files; path normalization; directory creation |
 
 ### Three template ref formats
@@ -58,7 +68,7 @@ interface ExternalSource {
 ### Two-pass template evaluation
 
 - **Pass 1** (`collectParams`): `!sub` resolved, `!exp`/`!fnc` no-ops, `pb-metadata.params` harvested from template + all components → `HarvestedParams` shown in modal
-- **Pass 2** (`evaluate`): full evaluation with user-supplied `ResolvedParams`, `pb-metadata` stripped, result stamped with `pb-metadata.template` (+ `pb-metadata.params` if non-empty)
+- **Pass 2** (`evaluateTemplate`): full evaluation with user-supplied `ResolvedParams`, `pb-metadata` stripped, result stamped with `pb-metadata.template` (+ `pb-metadata.params` if non-empty)
 
 ### Param scoping
 
