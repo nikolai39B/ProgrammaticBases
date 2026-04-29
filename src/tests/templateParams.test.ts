@@ -111,6 +111,21 @@ describe('parseParamSpecs', () => {
     const result = parseParamSpecs({ dir: { type: 'enum', options: 'ASC' } });
     expect(result.dir).toMatchObject({ type: 'enum', options: [] });
   });
+
+  it('parses defaultExpr as a string', () => {
+    const result = parseParamSpecs({ x: { type: 'string', defaultExpr: 'new Date().toISOString()' } });
+    expect(result.x?.defaultExpr).toBe('new Date().toISOString()');
+  });
+
+  it('leaves defaultExpr undefined when absent', () => {
+    const result = parseParamSpecs({ x: { type: 'string', default: 'hello' } });
+    expect(result.x?.defaultExpr).toBeUndefined();
+  });
+
+  it('ignores defaultExpr when it is not a string', () => {
+    const result = parseParamSpecs({ x: { type: 'string', defaultExpr: 42 } });
+    expect(result.x?.defaultExpr).toBeUndefined();
+  });
 });
 
 // ── mergeHarvestedParams ──────────────────────────────────────────────────────

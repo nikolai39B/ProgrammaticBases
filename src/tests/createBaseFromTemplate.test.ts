@@ -8,7 +8,7 @@ import {
   TemplateConfigurationModal,
   ConfirmOverwriteModal,
 } from '../commands/createBaseFromTemplate';
-import { VaultTemplateSource, ExternalTemplateSource } from 'bases/templateSource';
+import { VaultTemplateSource, QualifiedTemplateSource } from 'bases/templateSource';
 import { HarvestedParams, ResolvedParams } from 'bases/templateParams';
 
 vi.mock('main', () => ({ default: class {} }));
@@ -33,9 +33,9 @@ function makeTFolder(children: (TFile | TFolder)[] = []): TFolder {
   return folder;
 }
 
-/** Wraps a TFile in a VaultTemplateSource. */
+/** Wraps a TFile in a VaultTemplateSource using the file path as the ref. */
 function makeVaultTemplate(file: TFile): VaultTemplateSource {
-  return new VaultTemplateSource(file);
+  return new VaultTemplateSource(file.path, file.path);
 }
 
 function makePlugin(overrides: {
@@ -71,6 +71,10 @@ function makePlugin(overrides: {
     writeBaseFromTemplate: vi.fn().mockResolvedValue(undefined),
   };
 
+  const templateSourceResolver = {
+    sourceFromFile: vi.fn((file: TFile, _context: string) => new VaultTemplateSource(file.path, file.path)),
+  };
+
   return {
     app: { vault, workspace } as any,
     settings: { basesFolder, componentsFolder: 'Templates/components' },
@@ -79,6 +83,7 @@ function makePlugin(overrides: {
     viewRegistry: {} as any,
     templateEvaluator,
     templateFileIO,
+    templateSourceResolver,
   } as any;
 }
 
@@ -170,7 +175,7 @@ describe('TemplatePicker', () => {
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('')).toEqual([
         makeVaultTemplate(vaultFile),
-        new ExternalTemplateSource('my-plugin', 'dashboard'),
+        new QualifiedTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
 
@@ -181,7 +186,7 @@ describe('TemplatePicker', () => {
       ]);
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('')).toEqual([
-        new ExternalTemplateSource('my-plugin', 'dashboard'),
+        new QualifiedTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
 
@@ -192,7 +197,7 @@ describe('TemplatePicker', () => {
       ]);
       const picker = new TemplatePicker(plugin.app, plugin);
       expect(picker.getSuggestions('dash')).toEqual([
-        new ExternalTemplateSource('my-plugin', 'dashboard'),
+        new QualifiedTemplateSource('my-plugin', 'dashboard'),
       ]);
     });
   });
@@ -246,7 +251,7 @@ describe('TemplateConfigurationModal', () => {
   // ── constructor ─────────────────────────────────────────────────────────────
 
   describe('constructor', () => {
-    it('defaults outputFolder to activeFile parent path and outputName to template basename', () => {
+    it('defaults outputFolder to activeFile parent path and outputName to template name', () => {
       const activeFile = Object.assign(new TFile(), { parent: { path: 'Notes/Daily' } });
       plugin.app.workspace.getActiveFile.mockReturnValue(activeFile);
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
@@ -254,7 +259,7 @@ describe('TemplateConfigurationModal', () => {
       expect((modal as any).outputName).toBe('my-template');
     });
 
-    it('uses empty folder and template basename when there is no active file', () => {
+    it('uses empty folder and template name when there is no active file', () => {
       plugin.app.workspace.getActiveFile.mockReturnValue(null);
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       expect((modal as any).outputFolder).toBe('');
@@ -269,8 +274,8 @@ describe('TemplateConfigurationModal', () => {
       expect((modal as any).outputName).toBe('my-template');
     });
 
-    it('uses templateName as the file name for plugin templates', () => {
-      const pluginTemplate = new ExternalTemplateSource('my-plugin', 'dashboard');
+    it('uses the template name (without qualifier) as the file name for qualified templates', () => {
+      const pluginTemplate = new QualifiedTemplateSource('my-plugin', 'dashboard');
       const modal = new TemplateConfigurationModal(plugin.app, plugin, pluginTemplate, {});
       expect((modal as any).outputName).toBe('dashboard');
     });
@@ -309,6 +314,38 @@ describe('TemplateConfigurationModal', () => {
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
       expect((modal as any).values['x']).toBe('hello');
     });
+
+    it('pre-fills defaultExpr result when defaultExpr is present', () => {
+      const harvested: HarvestedParams = {
+        x: { specs: { '': { type: 'string', defaultExpr: '"computed"' } } },
+      };
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
+      expect((modal as any).values['x']).toBe('computed');
+    });
+
+    it('defaultExpr takes precedence over default', () => {
+      const harvested: HarvestedParams = {
+        x: { specs: { '': { type: 'string', default: 'static', defaultExpr: '"dynamic"' } } },
+      };
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
+      expect((modal as any).values['x']).toBe('dynamic');
+    });
+
+    it('falls back to static default when defaultExpr throws', () => {
+      const harvested: HarvestedParams = {
+        x: { specs: { '': { type: 'string', default: 'fallback', defaultExpr: 'throw new Error("bad")' } } },
+      };
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
+      expect((modal as any).values['x']).toBe('fallback');
+    });
+
+    it('falls back to empty string when defaultExpr throws and no static default', () => {
+      const harvested: HarvestedParams = {
+        x: { specs: { '': { type: 'string', defaultExpr: 'throw new Error("bad")' } } },
+      };
+      const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
+      expect((modal as any).values['x']).toBe('');
+    });
   });
 
   // ── create() ───────────────────────────────────────────────────────────────
@@ -323,7 +360,7 @@ describe('TemplateConfigurationModal', () => {
     });
 
     it('calls templateFileManager.createBaseFromTemplate for plugin templates', async () => {
-      const pluginTemplate = new ExternalTemplateSource('my-plugin', 'dashboard');
+      const pluginTemplate = new QualifiedTemplateSource('my-plugin', 'dashboard');
       const modal = new TemplateConfigurationModal(plugin.app, plugin, pluginTemplate, {});
       await (modal as any).create();
       expect(plugin.templateFileIO.createBaseFromTemplate).toHaveBeenCalledWith(pluginTemplate, 'dashboard', {});

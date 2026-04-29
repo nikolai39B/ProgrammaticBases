@@ -82,10 +82,13 @@ pb-metadata:
       description: Only include items on or after this date.
       type: date
       optional: true
+      defaultExpr: "new Date().toISOString().slice(0, 10)"
     sinceDateTime:
       label: Since date/time
       description: Only include items at or after this exact time.
       type: datetime
+      default: "2000-01-01T00:00"
+      defaultExpr: "this expression is intentionally invalid"
 views:
   - !sub debug:view
 `;

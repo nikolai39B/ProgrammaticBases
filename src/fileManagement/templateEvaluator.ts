@@ -2,7 +2,7 @@
 
 import * as yaml from 'js-yaml';
 import { App } from 'obsidian';
-import { ExternalSource } from 'settings';
+import { QualifiedSource } from 'settings';
 import { BaseBuilder } from 'bases/baseBuilder';
 import { BaseConfig } from 'bases/baseConfig';
 import {
@@ -14,7 +14,6 @@ import {
   parseParamSpecs,
 } from 'bases/templateParams';
 import {
-  ExternalTemplateSource,
   TemplateSource,
   TemplateSourceResolver,
   VaultTemplateSource,
@@ -34,16 +33,14 @@ import { ViewRegistry } from 'views/viewRegistry';
  *   user-supplied `resolvedParams`.
  *
  * Unqualified `!sub` refs (e.g. `!sub filter/isTask`) are resolved against the
- * vault components folder via {@link TemplateSourceResolver.parseSubRef}.
- *
- * Qualified `!sub` refs (e.g. `!sub task-base:filter/isTask`) are resolved
- * against the named external source via {@link TemplateSourceResolver.parseSubRef}.
+ * vault components folder. Qualified `!sub` refs (e.g. `!sub task-base:filter/isTask`)
+ * are resolved against the named qualified source.
  */
 export class TemplateEvaluator {
   constructor(
     private readonly app: App,
     private readonly resolver: TemplateSourceResolver,
-    private readonly getSources: () => Map<string, ExternalSource>,
+    private readonly getSources: () => Map<string, QualifiedSource>,
     private readonly getViewRegistry: () => ViewRegistry,
   ) {}
 
@@ -102,7 +99,9 @@ export class TemplateEvaluator {
   private async resolveContent(source: TemplateSource, isComponent: boolean): Promise<string> {
     // Handle vault file sources
     if (source instanceof VaultTemplateSource) {
-      return this.app.vault.read(source.file);
+      const file = this.app.vault.getFileByPath(source.path);
+      if (!file) throw new Error(`File not found: ${source.path}`);
+      return this.app.vault.read(file);
     }
 
     // Otherwise, get the external source
@@ -171,7 +170,7 @@ export class TemplateEvaluator {
       resolve: (data: unknown) => typeof data === 'string',
       construct: (ref: string) => {
         // Parse the ref
-        const source = this.resolver.parseSubRef(ref);
+        const source = this.resolver.parseRef(ref, 'component');
 
         // Collect the params from the component
         const childPath = currentSourcePath ? `${currentSourcePath} > ${ref}` : ref;
@@ -221,7 +220,7 @@ export class TemplateEvaluator {
       kind: 'scalar',
       resolve: (data: unknown) => typeof data === 'string',
       construct: (ref: string) => {
-        const source = this.resolver.parseSubRef(ref);
+        const source = this.resolver.parseRef(ref, 'component');
         const childPath = currentSourcePath ? `${currentSourcePath} > ${ref}` : ref;
         return this.evaluateResolved(source, visited, resolvedParams, childPath, true);
       },
@@ -268,10 +267,9 @@ export class TemplateEvaluator {
   private unwrapContent(raw: unknown): unknown {
     if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
       const obj = raw as Record<string, unknown>;
-      if ('pb-metadata' in obj) {
-        const { 'pb-metadata': _, ...rest } = obj;
-        return rest;
-      }
+      const { 'pb-metadata': _meta, ...rest } = obj;
+      const unwrapped = 'pb-metadata' in obj ? rest : obj;
+      return 'pb-content' in unwrapped ? unwrapped['pb-content'] : unwrapped;
     }
     return raw;
   }

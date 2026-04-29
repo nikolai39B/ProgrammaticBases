@@ -1,135 +1,107 @@
 // templateSource.ts
 
-import { App, normalizePath, TFile } from 'obsidian';
+import { normalizePath, TFile } from 'obsidian';
 
-export type TemplateSourceType = 'vault' | 'external';
+export type TemplateSourceType = 'vault' | 'qualified';
 
 /**
- * A template stored as a vault file.
- * Can be constructed from a {@link TFile} or a vault-relative path string.
- * Whichever is provided is stored immediately; the other is resolved lazily,
- * cached, and returned on first access.
+ * A pure identifier for a template stored as a vault file.
+ *
+ * `toRef()` returns the folder-relative ref (e.g. `dashboard.yaml`) — stored in
+ * `pb-metadata.template` and used for cycle detection.
+ * `path` returns the vault-relative path (e.g. `Templates/bases/dashboard.yaml`).
+ *
+ * Content retrieval is handled externally (e.g. by `TemplateEvaluator`).
  */
 export class VaultTemplateSource {
-  //-- Attributes
-
-  // Source type
   readonly type: TemplateSourceType = 'vault' as const;
 
-  // Template file and path
-  private readonly _path: string;
-  private _file: TFile | undefined; // File is initialized lazily
+  constructor(readonly path: string, private readonly _ref: string) {}
 
-  // App
-  private readonly _app: App | undefined;
+  /** Template folder-relative ref (e.g. `dashboard.yaml`). */
+  toRef(): string { return this._ref; }
 
-
-  //-- Constructor
-
-  /**
-   * Construct from a `TFile` when the file object is already in hand (e.g. from a
-   * file-picker modal). The path is read directly from the file; `app` is not needed.
-   *
-   * Construct from a vault-relative path string when only the path is known (e.g.
-   * when restoring a source from a stored `pb-metadata.template` ref). `app` is
-   * required so the `file` accessor can lazily resolve the `TFile` on first access.
-   */
-  constructor(file: TFile);
-  constructor(path: string, app: App);
-  constructor(fileOrPath: TFile | string, app?: App) {
-    if (typeof fileOrPath === 'string') {
-      this._path = fileOrPath;
-      this._app = app;
-    } else {
-      this._file = fileOrPath;
-      this._path = fileOrPath.path;
-    }
+  /** Leaf file name with no path or extension (e.g. `boards/task-board.yaml` → `task-board`). */
+  toName(): string {
+    const leaf = this._ref.includes('/') ? this._ref.slice(this._ref.lastIndexOf('/') + 1) : this._ref;
+    return leaf.replace(/\.yaml$/, '');
   }
-
-
-  //-- Accesors
-  get path(): string { return this._path; }
-
-  /** Resolves and caches the TFile, throwing if the path cannot be found in the vault. */
-  get file(): TFile {
-    if (!this._file) {
-      const file = this._app!.vault.getFileByPath(this._path);
-      if (!file) throw new Error(`File not found: ${this._path}`);
-      this._file = file;
-    }
-    return this._file;
-  }
-
-  /** Returns the vault-relative path as the serializable ref string. */
-  toRef(): string { return this._path; }
 }
 
-/** A template registered by an external source. */
-export class ExternalTemplateSource {
-  //-- Attributes
-
-  // Source type
-  readonly type: TemplateSourceType = 'external' as const;
+/**
+ * A template provided by a registered qualified source (i.e. another plugin).
+ * Referenced using the `sourceName:templateName` format.
+ */
+export class QualifiedTemplateSource {
+  readonly type: TemplateSourceType = 'qualified' as const;
   constructor(readonly sourceName: string, readonly templateName: string) {}
 
-  //-- Accessors
-
-  /** Returns a `"sourceName:templateName"` ref string. */
+  /** Returns `"sourceName:templateName"`. */
   toRef(): string { return `${this.sourceName}:${this.templateName}`; }
+
+  /** Display name — just the template name, without the source qualifier. */
+  toName(): string { return this.templateName; }
 }
 
 /** Union of all supported template source kinds. */
-export type TemplateSource = VaultTemplateSource | ExternalTemplateSource;
+export type TemplateSource = VaultTemplateSource | QualifiedTemplateSource;
 
 // ── TemplateSourceResolver ────────────────────────────────────────────────────
 
 /**
- * Parses template ref strings into {@link TemplateSource} instances,
- * validating vault file existence where applicable.
+ * Parses template ref strings into {@link TemplateSource} instances.
  *
- * This is the single authoritative place for the format 1 vs 2 distinction:
- * - Format 1 (unqualified `!sub`): component folder-relative vault path
- * - Format 2 (qualified `!sub`): external source component (`sourceName:key`)
- * - Format 3 (header ref): vault-relative template path or external template ref
+ * All refs are either qualified (`sourceName:key`) or folder-relative.
+ * Pass `context: 'component'` for `!sub` refs (resolved against {@link componentsFolder})
+ * or `context: 'base'` for header refs stored in `pb-metadata.template`
+ * (resolved against {@link basesFolder}).
  */
 export class TemplateSourceResolver {
   constructor(
-    readonly app: App,
     private readonly getComponentsFolder: () => string,
+    private readonly getBasesFolder: () => string,
   ) {}
 
   get componentsFolder(): string { return this.getComponentsFolder(); }
+  get basesFolder(): string { return this.getBasesFolder(); }
 
   /**
-   * Parse a header ref (stored in `pb-metadata.template`).
-   * Qualified → {@link ExternalTemplateSource} (identity only; external source validates existence).
-   * Unqualified → validates file exists in vault; throws with a "file was moved?" message
-   * if not found; returns {@link VaultTemplateSource} with TFile otherwise.
+   * Parses a ref string into a {@link TemplateSource}.
+   *
+   * - Qualified (`sourceName:key`) → {@link QualifiedTemplateSource}
+   * - Unqualified → resolved against the folder for the given context;
+   *   `.yaml` is appended if absent.
+   *
+   * @param ref     - The ref string (e.g. `filter/isTask` or `task-base:filter/isTask`).
+   * @param context - `'component'` resolves against {@link componentsFolder};
+   *                  `'base'` resolves against {@link basesFolder}.
+   * @throws If `ref` contains `..`.
    */
-  parseHeaderRef(ref: string): TemplateSource {
+  parseRef(ref: string, context: 'base' | 'component'): TemplateSource {
     const qualified = this.parseQualified(ref);
-    if (qualified) return new ExternalTemplateSource(qualified.sourceName, qualified.templateName);
-    const file = this.app.vault.getFileByPath(ref);
-    if (!file) throw new Error(
-      `Template not found: "${ref}". If you moved the file, update the path in pb-metadata.template.`
-    );
-    return new VaultTemplateSource(file);
+    if (qualified) return new QualifiedTemplateSource(qualified.sourceName, qualified.templateName);
+
+    if (ref.includes('..')) throw new Error(`Invalid ref path: ${ref}`);
+
+    const folder = context === 'component' ? this.componentsFolder : this.basesFolder;
+    const withYaml = ref.endsWith('.yaml') ? ref : `${ref}.yaml`;
+    const vaultPath = normalizePath(`${folder}/${withYaml}`);
+
+    return new VaultTemplateSource(vaultPath, ref);
   }
 
   /**
-   * Parse a `!sub` component ref.
-   * Qualified → {@link ExternalTemplateSource} (identity only; external source validates existence).
-   * Unqualified → resolves against the components folder; throws if the file does not exist.
+   * Constructs a {@link VaultTemplateSource} from a TFile, computing the
+   * folder-relative ref by stripping the context folder prefix from the file path.
+   *
+   * @param file    - The vault file to wrap.
+   * @param context - `'base'` strips {@link basesFolder}; `'component'` strips {@link componentsFolder}.
    */
-  parseSubRef(ref: string): TemplateSource {
-    const qualified = this.parseQualified(ref);
-    if (qualified) return new ExternalTemplateSource(qualified.sourceName, qualified.templateName);
-    if (ref.includes('..')) throw new Error(`Invalid !sub path: ${ref}`);
-    const withYaml = ref.endsWith('.yaml') ? ref : `${ref}.yaml`;
-    const candidate = normalizePath(`${this.getComponentsFolder()}/${withYaml}`);
-    const file = this.app.vault.getFileByPath(candidate);
-    if (!file) throw new Error(`Component not found: "${ref}" in folder "${this.getComponentsFolder()}"`);
-    return new VaultTemplateSource(file);
+  sourceFromFile(file: TFile, context: 'base' | 'component'): VaultTemplateSource {
+    const folder = context === 'component' ? this.componentsFolder : this.basesFolder;
+    const prefix = folder ? `${folder}/` : '';
+    const ref = file.path.startsWith(prefix) ? file.path.slice(prefix.length) : file.path;
+    return new VaultTemplateSource(file.path, ref);
   }
 
   private parseQualified(ref: string): { sourceName: string; templateName: string } | null {

@@ -2,29 +2,57 @@
 
 ## Status
 
-All 596 tests pass. File management layer refactor complete. `TemplateConfigurationModal` is multi-page (one page per param source, output location last).
+618 tests passing. The create and update flows are both fully implemented with multi-page param modals.
+
+---
+
+## What was just completed
+
+### `ParamConfigModal` base class refactor
+Shared param modal logic extracted from `createBaseFromTemplate.ts` into a new abstract base class `ParamConfigModal` (`src/commands/paramConfigModal.ts`). Both modals now extend it:
+
+- `TemplateConfigurationModal` — adds an output-location final page; "Create" button
+- `UpdateConfigurationModal` — no output-location page; "Update" button appears on last param page (or immediately if no params)
+
+### Update command redesign
+`updateBaseFromTemplate.ts` rewritten. Old flow: simple confirm dialog → re-evaluate from scratch. New flow:
+1. Read `pb-metadata.template` and `pb-metadata.params` from the active `.base` file
+2. Resolve template source via `templateSourceResolver.parseRef`
+3. Harvest params from template + components
+4. Open `UpdateConfigurationModal` pre-filled with the cached params
+5. On confirm, call `templateFileIO.writeBaseFromTemplate` directly
+
+**Date parsing fix**: `yaml.load` now uses `yaml.CORE_SCHEMA` to prevent ISO date strings (e.g. `2026-04-23`) from being coerced to `Date` objects.
+
+### `VaultTemplateSource` pure-identifier refactor
+`VaultTemplateSource` and `TemplateSourceResolver` are now pure path/identifier logic with no `App` or `TFile` dependencies. All vault I/O lives in `TemplateEvaluator.resolveContent`.
+
+### `toName()` method
+Both source types now have `toName()` for display-friendly names:
+- `VaultTemplateSource`: leaf filename stripped of folder and `.yaml` extension
+- `QualifiedTemplateSource`: just `templateName`
+
+### `defaultExpr` support
+Param specs can declare `defaultExpr: "<js expression>"` evaluated at modal-open time (no params context). Fallback chain: expr result → static `default` → type fallback.
+
+### `pb-content` unwrapping fix
+`unwrapContent` now strips `pb-content:` wrapper after stripping `pb-metadata:`, fixing a "no deserializer registered for view type undefined" error when vault components use `pb-content`.
 
 ---
 
 ## Next steps
 
-### 1. `TemplateConfigurationModal` UI gaps
+### 1. Pending todos (from project-log.md)
 
-- **date / datetime inputs** — currently render as plain text; should use `<input type="date">` / `<input type="datetime-local">`
-- **number inputs** — no `min` / `max` / `step` support in `ParamSpec`; also renders as text
-- **description / hint text** — `description` field exists on `ParamSpec` but is not displayed under fields
-- **required / validation** — submitting with empty required fields gives no feedback
-- **select / enum type** — no dropdown option for fixed-choice params; needs new type in `ParamSpec`
-- **Split UX** — after splitting, labels show raw source paths (e.g. `view/focused > filter/inThisFolder`), which is noisy; needs friendlier display
-- **Visual grouping** — flat param list within a page has no section breaks; component-sourced params could be grouped visually
+- **Handle params declared by multiple templates under the same name** — currently, when the template and a component both declare a param with the same name, they appear on separate pages with separate values. There may be a case for merging/splitting these.
 
 ### 2. Interactive testing
 
-- Test full flow: pick template → param modal → create base
-- Test `!exp` / `!fnc` with params flowing through
-- Test nested component params appearing on separate pages with correct source paths
-- Test "Update base from template" re-applies stored params without re-prompting
-- Test external source templates (qualified `!sub` refs)
+- Full create flow with debug template: all param types, `defaultExpr` for date
+- Full update flow: open existing `.base`, run update command, verify modal pre-fills correctly, verify date/datetime fields are populated as strings
+- Nested component params appearing on correct pages
+- External source templates (qualified `!sub` refs)
+- `task-base` dashboard creation and update
 
 ### 3. `task-base` integration
 
@@ -34,50 +62,25 @@ See "What Needs to Happen in `task-base`" section below.
 
 ## Architecture
 
-### Class responsibilities
+### Key files
 
-| Class | File | Responsibility |
-|---|---|---|
-| `TemplateSourceResolver` | `templateSource.ts` | Parses all ref formats; validates vault paths; single authoritative place for format 1 vs 2 distinction |
-| `TemplateEvaluator` | `templateEvaluator.ts` | Evaluates YAML templates — resolves `!sub`/`!exp`/`!fnc` tags in two passes; stamps `pb-metadata`; all logic in private methods |
-| `TemplateFileIO` | `templateFileIO.ts` | Orchestrates template → `.base` file pipeline; delegates evaluation to `TemplateEvaluator` and writes to `BaseFileIO` |
-| `BaseFileIO` | `baseFileIO.ts` | Read/create/write `.base` files; path normalization; directory creation |
+| File | Responsibility |
+|---|---|
+| `src/commands/paramConfigModal.ts` | Abstract base class for param modals — page building, pre-fill, field rendering, validation, nav |
+| `src/commands/createBaseFromTemplate.ts` | `TemplatePicker`, `TemplateConfigurationModal`, `ConfirmOverwriteModal` |
+| `src/commands/updateBaseFromTemplate.ts` | `updateBaseFromTemplateCommand`, `UpdateConfigurationModal` |
+| `src/bases/templateSource.ts` | `VaultTemplateSource`, `QualifiedTemplateSource`, `TemplateSourceResolver` |
+| `src/fileManagement/templateEvaluator.ts` | Two-pass YAML evaluation (`collectParams` / `evaluateTemplate`) |
+| `src/fileManagement/templateFileIO.ts` | Template → `.base` pipeline; delegates to evaluator + file I/O |
 
-### Three template ref formats
+### Param key format
 
-| # | Format | Example | Parsed by |
-|---|---|---|---|
-| 1 | Unqualified `!sub` — components-folder-relative | `filter/isTask` | `resolver.parseSubRef` |
-| 2 | Qualified `!sub` — external source component | `task-base:filter/isTask` | `resolver.parseSubRef` |
-| 3 | Header ref — stored in `pb-metadata.template` | `Templates/board.yaml` or `task-base:dashboard` | `resolver.parseHeaderRef` |
-
-### External Source Registration
-
-Other plugins call `window.programmaticBases.registerSource(source)` to contribute:
-- **Components** — YAML parts resolved via qualified `!sub` refs (e.g. `!sub task-base:filter/isTask`)
-- **Templates** — full base templates shown in the "Create base from template" picker
-
-```ts
-interface ExternalSource {
-  name: string;
-  components?: Record<string, string>; // key → YAML content
-  templates?: Record<string, string>;  // templateName → YAML content
-}
-```
+`ResolvedParams` uses scoped keys: `"sourcePath>paramName"` for component-level params, plain `"paramName"` for template-level. The modal pre-fill loop and `buildScopedParams` both use this format.
 
 ### Two-pass template evaluation
 
-- **Pass 1** (`collectParams`): `!sub` resolved, `!exp`/`!fnc` no-ops, `pb-metadata.params` harvested from template + all components → `HarvestedParams` shown in modal
-- **Pass 2** (`evaluateTemplate`): full evaluation with user-supplied `ResolvedParams`, `pb-metadata` stripped, result stamped with `pb-metadata.template` (+ `pb-metadata.params` if non-empty)
-
-### Param scoping
-
-`ResolvedParams` uses `"sourcePath>paramName"` keys for component-scoped values, plain `"paramName"` for template-level. The modal fans merged values out to all relevant scoped keys before storing. `buildScopedParams` exposes only keys for the exact `sourcePath` — no cross-scope fallback.
-
-### Settings
-
-- `basesFolder: string` — vault folder for user's own base templates
-- `componentsFolder: string` — vault folder for unqualified `!sub` resolution
+- **Pass 1** (`collectParams`): resolves `!sub`, no-ops `!exp`/`!fnc`, harvests `pb-metadata.params` from template + all components → `HarvestedParams` shown in modal
+- **Pass 2** (`evaluateTemplate`): full evaluation with user-supplied `ResolvedParams`; stamps `pb-metadata.template` (+ `pb-metadata.params` if non-empty)
 
 ---
 

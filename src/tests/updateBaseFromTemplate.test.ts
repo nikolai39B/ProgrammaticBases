@@ -2,10 +2,15 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Modal, Notice, TFile } from 'obsidian';
-import { updateBaseFromTemplateCommand } from '../commands/updateBaseFromTemplate';
+import { updateBaseFromTemplateCommand, UpdateConfigurationModal } from '../commands/updateBaseFromTemplate';
+import { VaultTemplateSource } from 'bases/templateSource';
+import { HarvestedParams, ResolvedParams } from 'bases/templateParams';
 import * as yaml from 'js-yaml';
 
 vi.mock('main', () => ({ default: class {} }));
+vi.mock('settings', () => ({
+  FolderSuggest: class { constructor() {} },
+}));
 vi.mock('js-yaml');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -18,11 +23,14 @@ function makeActiveFile(extension = 'base'): TFile {
   return f;
 }
 
+const mockSource = new VaultTemplateSource('Templates/board.yaml', 'board');
+
 function makePlugin(overrides: {
   activeFile?: TFile | null;
   fileContent?: string;
+  harvested?: HarvestedParams;
 } = {}) {
-  const { activeFile = null, fileContent = '' } = overrides;
+  const { activeFile = null, fileContent = '', harvested = {} } = overrides;
 
   const app = {
     workspace: { getActiveFile: vi.fn().mockReturnValue(activeFile) },
@@ -30,23 +38,33 @@ function makePlugin(overrides: {
   };
 
   const templateFileIO = {
-    writeBaseFromStoredRef: vi.fn().mockResolvedValue(undefined),
+    writeBaseFromTemplate: vi.fn().mockResolvedValue(undefined),
   };
 
-  return { app, templateFileIO } as any;
+  const templateEvaluator = {
+    collectParams: vi.fn().mockResolvedValue(harvested),
+  };
+
+  const templateSourceResolver = {
+    parseRef: vi.fn().mockReturnValue(mockSource),
+  };
+
+  return { app, templateFileIO, templateEvaluator, templateSourceResolver } as any;
 }
 
-/** Sets yaml.load to return YAML with a pb-metadata.template value. */
-function withTemplate(templatePath: string) {
-  vi.mocked(yaml.load).mockReturnValue({ 'pb-metadata': { template: templatePath } });
+/** Sets yaml.load to return a base with pb-metadata.template (and optionally params). */
+function withTemplate(templateRef: string, params?: ResolvedParams) {
+  vi.mocked(yaml.load).mockReturnValue({
+    'pb-metadata': { template: templateRef, ...(params ? { params } : {}) },
+  });
 }
 
-/** Sets yaml.load to return YAML with no pb-metadata section. */
+/** Sets yaml.load to return a base with no pb-metadata section. */
 function withNoMetadata() {
   vi.mocked(yaml.load).mockReturnValue({});
 }
 
-/** Sets yaml.load to return YAML with pb-metadata but no template. */
+/** Sets yaml.load to return a base with pb-metadata but no template field. */
 function withMetadataNoTemplate() {
   vi.mocked(yaml.load).mockReturnValue({ 'pb-metadata': {} });
 }
@@ -97,38 +115,84 @@ describe('updateBaseFromTemplateCommand', () => {
 
   // ── Happy path ──────────────────────────────────────────────────────────────
 
-  it('opens a ConfirmUpdateModal when a template path is found in metadata', async () => {
-    withTemplate('Templates/board.yaml');
+  it('opens an UpdateConfigurationModal when a template ref is found', async () => {
+    withTemplate('board');
     const openSpy = vi.spyOn(Modal.prototype, 'open');
     const plugin = makePlugin({ activeFile: makeActiveFile() });
     await updateBaseFromTemplateCommand(plugin).callback?.();
+    expect(plugin.templateEvaluator.collectParams).toHaveBeenCalledOnce();
     expect(openSpy).toHaveBeenCalledOnce();
     expect(Notice).not.toHaveBeenCalled();
   });
 
-  it('calls templateFileIO.writeBaseFromStoredRef with templatePath and active file path on confirm', async () => {
-    withTemplate('Templates/board.yaml');
+  it('passes cached params from pb-metadata as initial values', async () => {
+    const harvested: HarvestedParams = {
+      count: { specs: { '': { type: 'number', label: 'Count', optional: false } } },
+    };
+    withTemplate('board', { count: 10 });
+    const openSpy = vi.spyOn(Modal.prototype, 'open');
+    const plugin = makePlugin({ activeFile: makeActiveFile(), harvested });
+    await updateBaseFromTemplateCommand(plugin).callback?.();
+    const modal = openSpy.mock.contexts[0] as UpdateConfigurationModal;
+    expect((modal as any).values).toMatchObject({ count: 10 });
+  });
+
+  it('calls writeBaseFromTemplate with the source, active file path, and values on update', async () => {
+    withTemplate('board');
     const openSpy = vi.spyOn(Modal.prototype, 'open');
     const activeFile = makeActiveFile();
     const plugin = makePlugin({ activeFile });
     await updateBaseFromTemplateCommand(plugin).callback?.();
     const modal = openSpy.mock.contexts[0] as any;
-    await modal.onConfirm();
-    expect(plugin.templateFileIO.writeBaseFromStoredRef).toHaveBeenCalledOnce();
-    expect(plugin.templateFileIO.writeBaseFromStoredRef).toHaveBeenCalledWith(
-      'Templates/board.yaml',
+    await modal.onFinalAction();
+    expect(plugin.templateFileIO.writeBaseFromTemplate).toHaveBeenCalledOnce();
+    expect(plugin.templateFileIO.writeBaseFromTemplate).toHaveBeenCalledWith(
+      mockSource,
       activeFile.path,
+      expect.any(Object),
     );
   });
 
-  it('shows an error Notice and does not rethrow when writeBaseFromStoredRef throws', async () => {
-    withTemplate('Templates/board.yaml');
+  it('shows a success Notice after update', async () => {
+    withTemplate('board');
     const openSpy = vi.spyOn(Modal.prototype, 'open');
     const plugin = makePlugin({ activeFile: makeActiveFile() });
-    plugin.templateFileIO.writeBaseFromStoredRef.mockRejectedValue(new Error('Template gone'));
     await updateBaseFromTemplateCommand(plugin).callback?.();
     const modal = openSpy.mock.contexts[0] as any;
-    await expect(modal.onConfirm()).resolves.not.toThrow();
+    await modal.onFinalAction();
+    expect(Notice).toHaveBeenCalledWith(expect.stringContaining('my-board.base'));
+  });
+
+  it('preserves date and datetime params as strings rather than Date objects', async () => {
+    const actualYaml = await vi.importActual<typeof import('js-yaml')>('js-yaml');
+    vi.mocked(yaml.load).mockImplementationOnce(actualYaml.load as typeof yaml.load);
+    const fileContent = [
+      'pb-metadata:',
+      '  template: board',
+      '  params:',
+      '    sinceDate: 2026-04-23',
+      '    sinceDateTime: 2000-01-01T00:00',
+    ].join('\n');
+    const harvested: HarvestedParams = {
+      sinceDate: { specs: { '': { type: 'date', label: 'Since date', optional: true } } },
+      sinceDateTime: { specs: { '': { type: 'datetime', label: 'Since datetime', optional: false } } },
+    };
+    const openSpy = vi.spyOn(Modal.prototype, 'open');
+    const plugin = makePlugin({ activeFile: makeActiveFile(), fileContent, harvested });
+    await updateBaseFromTemplateCommand(plugin).callback?.();
+    const modal = openSpy.mock.contexts[0] as any;
+    expect(modal.values['sinceDate']).toBe('2026-04-23');
+    expect(modal.values['sinceDateTime']).toBe('2000-01-01T00:00');
+  });
+
+  it('shows an error Notice and does not rethrow when writeBaseFromTemplate throws', async () => {
+    withTemplate('board');
+    const openSpy = vi.spyOn(Modal.prototype, 'open');
+    const plugin = makePlugin({ activeFile: makeActiveFile() });
+    plugin.templateFileIO.writeBaseFromTemplate.mockRejectedValue(new Error('Template gone'));
+    await updateBaseFromTemplateCommand(plugin).callback?.();
+    const modal = openSpy.mock.contexts[0] as any;
+    await expect((modal as any).update()).resolves.not.toThrow();
     expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Template gone'), 0);
   });
 });

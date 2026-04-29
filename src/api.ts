@@ -7,7 +7,7 @@ import { Property } from 'primitives/property';
 import { CardViewBuilder } from 'views/cardViewBuilder';
 import { TableViewBuilder } from 'views/tableViewBuilder';
 import { ListViewBuilder } from 'views/listViewBuilder';
-import { ExternalSource } from 'settings';
+import { QualifiedSource } from 'settings';
 
 export interface RegisterSourceOptions {
   /** If true, merges with an existing source of the same name instead of throwing. Later keys win. */
@@ -22,20 +22,20 @@ export class ProgrammaticBasesAPI {
   ListViewBuilder = ListViewBuilder;
   Property = Property;
 
-  //-- EXTERNAL SOURCES
-  private _registeredSources: Map<string, ExternalSource> = new Map();
+  //-- QUALIFIED SOURCES
+  private _registeredSources: Map<string, QualifiedSource> = new Map();
 
-  /** Returns a copy of the registered external sources map. */
-  get registeredSources(): Map<string, ExternalSource> {
+  /** Returns a copy of the registered qualified sources map. */
+  get registeredSources(): Map<string, QualifiedSource> {
     return new Map(this._registeredSources);
   }
 
   /**
-   * Registers an external source providing components and/or base templates.
+   * Registers a qualified source providing components and/or base templates.
    * Throws if a source with the same name is already registered, unless `append` is true,
    * in which case the components and templates are merged (later keys win).
    */
-  registerSource(source: ExternalSource, options: RegisterSourceOptions = {}): void {
+  registerSource(source: QualifiedSource, options: RegisterSourceOptions = {}): void {
     const existing = this._registeredSources.get(source.name);
     if (existing) {
       if (!options.append) {
@@ -53,11 +53,11 @@ export class ProgrammaticBasesAPI {
 
   //-- METHODS
   readBase = (filePath: string) =>
-    ProgrammaticBases.instance.fileManager.readBase(filePath);
+    ProgrammaticBases.instance.baseFileIO.readBase(filePath);
   createBase = (config: BaseConfig, filePath: string) =>
-    ProgrammaticBases.instance.fileManager.createBase(config, filePath);
+    ProgrammaticBases.instance.baseFileIO.createBase(config, filePath);
   writeBase = (config: BaseConfig, filePath: string) =>
-    ProgrammaticBases.instance.fileManager.writeBase(config, filePath);
+    ProgrammaticBases.instance.baseFileIO.writeBase(config, filePath);
 
   //-- DEBUG
   debug = DebugUtils;

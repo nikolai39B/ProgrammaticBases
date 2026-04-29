@@ -2,10 +2,11 @@ import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder } from "o
 import ProgrammaticBases from "./main";
 
 /**
- * An external source contributed by a plugin, providing components and/or
+ * A qualified source contributed by a plugin, providing components and/or
  * base templates that integrate with the Programmatic Bases plugin.
+ * Components and templates are referenced using qualified refs (`sourceName:key`).
  */
-export interface ExternalSource {
+export interface QualifiedSource {
   /** Unique identifier for this source, used as the qualifier in !sub references, e.g. "task-base". */
   name: string;
   /**

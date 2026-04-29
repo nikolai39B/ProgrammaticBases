@@ -1,6 +1,5 @@
 // templateFileIO.ts
 
-import * as yaml from 'js-yaml';
 import { ResolvedParams } from 'bases/templateParams';
 import { TemplateSource } from 'bases/templateSource';
 import { TemplateSourceResolver } from 'bases/templateSource';
@@ -69,7 +68,7 @@ export class TemplateFileIO {
   ): Promise<void> {
     const storedParams = await this.readStoredParams(outputPath);
     const mergedParams = { ...storedParams, ...overrideParams };
-    const source = this.resolver.parseHeaderRef(templateRef);
+    const source = this.resolver.parseRef(templateRef, 'base');
     return this.writeBaseFromTemplate(source, outputPath, mergedParams);
   }
 

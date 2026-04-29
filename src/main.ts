@@ -3,7 +3,7 @@ import { Plugin } from 'obsidian';
 import { ProgrammaticBasesAPI } from 'api';
 import { createBaseFromTemplateCommand } from 'commands/createBaseFromTemplate';
 import { updateBaseFromTemplateCommand } from 'commands/updateBaseFromTemplate';
-import { ExternalSource, DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
+import { QualifiedSource, DEFAULT_SETTINGS, ProgrammaticBasesSettings, ProgrammaticBasesSettingTab} from "settings";
 
 import { CardViewInstaller } from 'views/cardViewInstaller';
 import { ListViewInstaller } from 'views/listViewInstaller';
@@ -31,6 +31,10 @@ export default class ProgrammaticBases extends Plugin {
   private _baseFileIO: BaseFileIO;
   get baseFileIO(): BaseFileIO { return this._baseFileIO; }
 
+  // Template source resolver
+  private _templateSourceResolver: TemplateSourceResolver;
+  get templateSourceResolver(): TemplateSourceResolver { return this._templateSourceResolver; }
+
   // Template evaluator
   private _templateEvaluator: TemplateEvaluator;
   get templateEvaluator(): TemplateEvaluator { return this._templateEvaluator; }
@@ -46,8 +50,8 @@ export default class ProgrammaticBases extends Plugin {
   private _settings: ProgrammaticBasesSettings;
   get settings(): ProgrammaticBasesSettings { return this._settings; }
 
-  /** External sources registered by other plugins at runtime. */
-  get allSources(): Map<string, ExternalSource> {
+  /** Qualified sources registered by other plugins at runtime. */
+  get allSources(): Map<string, QualifiedSource> {
     return this._api.registeredSources;
   }
 
@@ -87,12 +91,12 @@ export default class ProgrammaticBases extends Plugin {
       this._viewInstallers.forEach(i => i.install(this.viewRegistry));
 
       // Create the file management layer
-      const resolver = new TemplateSourceResolver(this.app, () => this.componentsFolder);
-      this._templateEvaluator = new TemplateEvaluator(this.app, resolver, () => this.allSources, () => this._viewRegistry);
+      this._templateSourceResolver = new TemplateSourceResolver(() => this.componentsFolder, () => this._settings.basesFolder);
+      this._templateEvaluator = new TemplateEvaluator(this.app, this._templateSourceResolver, () => this.allSources, () => this._viewRegistry);
       this._baseFileIO = new BaseFileIO(this.app, () => this._viewRegistry);
       this._templateFileIO = new TemplateFileIO(
         this._baseFileIO,
-        resolver,
+        this._templateSourceResolver,
         this._templateEvaluator,
       );
 

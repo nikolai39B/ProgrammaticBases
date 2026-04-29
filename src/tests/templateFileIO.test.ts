@@ -18,7 +18,8 @@ function makeSetup() {
     writeBase: vi.fn().mockResolvedValue(undefined),
   };
   const resolver = {
-    parseHeaderRef: vi.fn(),
+    parseRef: vi.fn(),
+    basesFolder: 'bases',
   } as any;
 
   const evaluator = {
@@ -42,7 +43,7 @@ describe('TemplateFileIO', () => {
   describe('createBaseFromTemplate()', () => {
     it('calls evaluator.evaluateTemplate with the source and params', async () => {
       const { io, evaluator } = makeSetup();
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
       const params = { taskLocation: 'Tasks' };
       await io.createBaseFromTemplate(source, 'my-board', params);
       expect(evaluator.evaluateTemplate).toHaveBeenCalledWith(source, params);
@@ -50,7 +51,7 @@ describe('TemplateFileIO', () => {
 
     it('calls baseFileIO.createBase with the built config and output path', async () => {
       const { io, baseFileIO } = makeSetup();
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
       await io.createBaseFromTemplate(source, 'my-board');
       expect(baseFileIO.createBase).toHaveBeenCalledWith(builtConfig, 'my-board');
       expect(baseFileIO.writeBase).not.toHaveBeenCalled();
@@ -62,7 +63,7 @@ describe('TemplateFileIO', () => {
   describe('writeBaseFromTemplate()', () => {
     it('calls evaluator.evaluateTemplate with the source and params', async () => {
       const { io, evaluator } = makeSetup();
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
       const params = { taskLocation: 'Tasks' };
       await io.writeBaseFromTemplate(source, 'my-board', params);
       expect(evaluator.evaluateTemplate).toHaveBeenCalledWith(source, params);
@@ -70,7 +71,7 @@ describe('TemplateFileIO', () => {
 
     it('calls baseFileIO.writeBase with the built config and output path', async () => {
       const { io, baseFileIO } = makeSetup();
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
       await io.writeBaseFromTemplate(source, 'my-board');
       expect(baseFileIO.writeBase).toHaveBeenCalledWith(builtConfig, 'my-board');
       expect(baseFileIO.createBase).not.toHaveBeenCalled();
@@ -84,8 +85,8 @@ describe('TemplateFileIO', () => {
       const { io, baseFileIO, resolver, evaluator } = makeSetup();
       const storedConfig = { metadata: { params: { folder: 'Tasks' } } } as any;
       baseFileIO.readBase.mockResolvedValue(storedConfig);
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
-      resolver.parseHeaderRef.mockReturnValue(source);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
+      resolver.parseRef.mockReturnValue(source);
       await io.writeBaseFromStoredRef('Templates/board.yaml', 'my-board.base');
       expect(evaluator.evaluateTemplate).toHaveBeenCalledWith(
         source,
@@ -97,8 +98,8 @@ describe('TemplateFileIO', () => {
       const { io, baseFileIO, resolver, evaluator } = makeSetup();
       const storedConfig = { metadata: { params: { folder: 'Tasks', flag: false } } } as any;
       baseFileIO.readBase.mockResolvedValue(storedConfig);
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
-      resolver.parseHeaderRef.mockReturnValue(source);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
+      resolver.parseRef.mockReturnValue(source);
       await io.writeBaseFromStoredRef('Templates/board.yaml', 'my-board.base', { flag: true });
       expect(evaluator.evaluateTemplate).toHaveBeenCalledWith(
         source,
@@ -109,8 +110,8 @@ describe('TemplateFileIO', () => {
     it('falls back to empty params when base file does not exist', async () => {
       const { io, baseFileIO, resolver, evaluator } = makeSetup();
       baseFileIO.readBase.mockRejectedValue(new Error('File not found'));
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
-      resolver.parseHeaderRef.mockReturnValue(source);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
+      resolver.parseRef.mockReturnValue(source);
       await io.writeBaseFromStoredRef('Templates/board.yaml', 'new-board.base');
       expect(evaluator.evaluateTemplate).toHaveBeenCalledWith(source, {});
     });
@@ -118,10 +119,10 @@ describe('TemplateFileIO', () => {
     it('calls resolver.parseHeaderRef with the template ref', async () => {
       const { io, baseFileIO, resolver } = makeSetup();
       baseFileIO.readBase.mockResolvedValue({ metadata: undefined });
-      const source = new VaultTemplateSource('Templates/board.yaml', {} as any);
-      resolver.parseHeaderRef.mockReturnValue(source);
+      const source = new VaultTemplateSource('Templates/board.yaml', 'board.yaml');
+      resolver.parseRef.mockReturnValue(source);
       await io.writeBaseFromStoredRef('Templates/board.yaml', 'my-board.base');
-      expect(resolver.parseHeaderRef).toHaveBeenCalledWith('Templates/board.yaml');
+      expect(resolver.parseRef).toHaveBeenCalledWith('Templates/board.yaml', 'base');
     });
   });
 

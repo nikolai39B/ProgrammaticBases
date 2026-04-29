@@ -11,6 +11,12 @@ interface BaseParamSpec {
   /** Pre-filled default value shown in the modal. */
   default?: ParamValue;
   /**
+   * JS expression evaluated when the modal opens to produce a dynamic default.
+   * Takes precedence over `default` when present. Has no access to params —
+   * use for time/environment values like `new Date().toISOString().slice(0, 10)`.
+   */
+  defaultExpr?: string;
+  /**
    * When `true`, the field may be left blank. Absent or `false` means the
    * field is required — the modal will not advance until it is filled.
    */
@@ -106,6 +112,7 @@ export function parseParamSpecs(raw: unknown): ParamSpecs {
       label: typeof v['label'] === 'string' ? v['label'] : undefined,
       description: typeof v['description'] === 'string' ? v['description'] : undefined,
       default: coerceDefault(type, v['default']),
+      defaultExpr: typeof v['defaultExpr'] === 'string' ? v['defaultExpr'] : undefined,
       optional: v['optional'] === true ? true : undefined,
     };
 
