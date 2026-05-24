@@ -11,22 +11,21 @@ import {
   ResolvedParams,
 } from 'bases/templateParams';
 
+/** Built-in tokens recognized by {@link evalDefaultExpr}. */
+const DEFAULT_EXPR_TOKENS: Record<string, () => ParamValue> = {
+  '{{today}}': () => new Date().toISOString().slice(0, 10),
+  '{{now}}':   () => new Date().toISOString().slice(0, 16),
+};
+
 /**
- * Evaluates a JavaScript expression string and returns its result as a
- * {@link ParamValue}, or `undefined` if the expression throws.
+ * Resolves a `defaultExpr` token to its current value.
  *
- * Used to resolve `defaultExpr` fields at modal-open time (no `params`
- * context — expression must be self-contained, e.g. `new Date().toISOString().slice(0,10)`).
- *
- * @param expr - A JS expression string suitable for wrapping in `return (...)`.
- * @returns The evaluated value cast to `ParamValue`, or `undefined` on error.
+ * Recognized tokens: `{{today}}` (YYYY-MM-DD), `{{now}}` (YYYY-MM-DDTHH:MM).
+ * Returns `undefined` for unrecognized tokens, triggering fallback to the
+ * static `default` value or the type's zero value.
  */
 export function evalDefaultExpr(expr: string): ParamValue | undefined {
-  try {
-    return new Function(`return (${expr})`)() as ParamValue;
-  } catch {
-    return undefined;
-  }
+  return DEFAULT_EXPR_TOKENS[expr.trim()]?.();
 }
 
 /**
@@ -136,7 +135,7 @@ export abstract class ParamConfigModal extends Modal {
         } else {
           defaultVal = '';
         }
-        this.values[key] = defaultVal as ParamValue;
+        this.values[key] = defaultVal;
       }
     }
   }
@@ -379,7 +378,7 @@ export abstract class ParamConfigModal extends Modal {
 
     if (this.currentPage > 0) {
       nav.addButton(btn => btn
-        .setButtonText('← Back')
+        .setButtonText('Back')
         .onClick(() => {
           this.pageErrors = {};
           this.currentPage--;
@@ -389,7 +388,7 @@ export abstract class ParamConfigModal extends Modal {
 
     if (!this.isOnFinalPage) {
       nav.addButton(btn => btn
-        .setButtonText('Next →')
+        .setButtonText('Next')
         .setCta()
         .onClick(() => {
           // Validate before advancing; re-render with inline errors on failure

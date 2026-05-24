@@ -5,13 +5,13 @@ import { Modal, Notice, TFile } from 'obsidian';
 import { updateBaseFromTemplateCommand, UpdateConfigurationModal } from '../commands/updateBaseFromTemplate';
 import { VaultTemplateSource } from 'bases/templateSource';
 import { HarvestedParams, ResolvedParams } from 'bases/templateParams';
-import * as yaml from 'js-yaml';
+import * as yaml from 'yaml';
 
 vi.mock('main', () => ({ default: class {} }));
 vi.mock('settings', () => ({
   FolderSuggest: class { constructor() {} },
 }));
-vi.mock('js-yaml');
+vi.mock('yaml');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ function makePlugin(overrides: {
   };
 
   const templateEvaluator = {
-    collectParams: vi.fn().mockResolvedValue(harvested),
+    collectTemplateParams: vi.fn().mockResolvedValue(harvested),
   };
 
   const templateSourceResolver = {
@@ -52,21 +52,21 @@ function makePlugin(overrides: {
   return { app, templateFileIO, templateEvaluator, templateSourceResolver } as any;
 }
 
-/** Sets yaml.load to return a base with pb-metadata.template (and optionally params). */
+/** Sets yaml.parse to return a base with pb-metadata.template (and optionally params). */
 function withTemplate(templateRef: string, params?: ResolvedParams) {
-  vi.mocked(yaml.load).mockReturnValue({
+  vi.mocked(yaml.parse).mockReturnValue({
     'pb-metadata': { template: templateRef, ...(params ? { params } : {}) },
   });
 }
 
-/** Sets yaml.load to return a base with no pb-metadata section. */
+/** Sets yaml.parse to return a base with no pb-metadata section. */
 function withNoMetadata() {
-  vi.mocked(yaml.load).mockReturnValue({});
+  vi.mocked(yaml.parse).mockReturnValue({});
 }
 
-/** Sets yaml.load to return a base with pb-metadata but no template field. */
+/** Sets yaml.parse to return a base with pb-metadata but no template field. */
 function withMetadataNoTemplate() {
-  vi.mocked(yaml.load).mockReturnValue({ 'pb-metadata': {} });
+  vi.mocked(yaml.parse).mockReturnValue({ 'pb-metadata': {} });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ describe('updateBaseFromTemplateCommand', () => {
     const openSpy = vi.spyOn(Modal.prototype, 'open');
     const plugin = makePlugin({ activeFile: makeActiveFile() });
     await updateBaseFromTemplateCommand(plugin).callback?.();
-    expect(plugin.templateEvaluator.collectParams).toHaveBeenCalledOnce();
+    expect(plugin.templateEvaluator.collectTemplateParams).toHaveBeenCalledOnce();
     expect(openSpy).toHaveBeenCalledOnce();
     expect(Notice).not.toHaveBeenCalled();
   });
@@ -164,8 +164,8 @@ describe('updateBaseFromTemplateCommand', () => {
   });
 
   it('preserves date and datetime params as strings rather than Date objects', async () => {
-    const actualYaml = await vi.importActual<typeof import('js-yaml')>('js-yaml');
-    vi.mocked(yaml.load).mockImplementationOnce(actualYaml.load as typeof yaml.load);
+    const actualYaml = await vi.importActual<typeof import('yaml')>('yaml');
+    vi.mocked(yaml.parse).mockImplementationOnce(actualYaml.parse as typeof yaml.parse);
     const fileContent = [
       'pb-metadata:',
       '  template: board',

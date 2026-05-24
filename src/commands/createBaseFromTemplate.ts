@@ -20,11 +20,15 @@ export function createBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
     callback: () => {
       // Guard: require at least one usable template source before opening the picker
       const hasVaultFolder = plugin.app.vault.getFolderByPath(plugin.settings.basesFolder) instanceof TFolder;
-      const hasPluginTemplates = [...plugin.allSources.values()].some(s => s.templates && Object.keys(s.templates).length > 0);
+      const sources = [...plugin.allSources.values()];
+      const hasPluginTemplates = sources.some(s => s.templates && Object.keys(s.templates).length > 0);
+
+      // If there's no templates, notify and return
       if (!hasVaultFolder && !hasPluginTemplates) {
         new Notice('No templates found. Configure a bases folder in settings or install a template plugin.');
         return;
       }
+      
       // At least one source exists — open the template picker
       new TemplatePicker(plugin.app, plugin).open();
     },
@@ -39,6 +43,10 @@ export function createBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
  * advances to {@link TemplateConfigurationModal}.
  */
 export class TemplatePicker extends SuggestModal<TemplateSource> {
+  /**
+   * @param app - The Obsidian app instance.
+   * @param plugin - The loaded plugin, used to access settings, sources, and the evaluator.
+   */
   constructor(app: App, private plugin: ProgrammaticBases) {
     super(app);
     this.setPlaceholder('Choose a base template…');
@@ -92,7 +100,7 @@ export class TemplatePicker extends SuggestModal<TemplateSource> {
    * @param source - The template source the user selected.
    */
   async onChooseSuggestion(source: TemplateSource) {
-    const harvested = await this.plugin.templateEvaluator.collectParams(source);
+    const harvested = await this.plugin.templateEvaluator.collectTemplateParams(source);
     new TemplateConfigurationModal(this.app, this.plugin, source, harvested).open();
   }
 }
@@ -114,6 +122,12 @@ export class TemplateConfigurationModal extends ParamConfigModal {
   private outputFolder: string;
   private outputName: string;
 
+  /**
+   * @param app - The Obsidian app instance.
+   * @param plugin - The loaded plugin, used to write the output file.
+   * @param template - The template source selected in {@link TemplatePicker}.
+   * @param harvested - Param specs collected from the template and its components.
+   */
   constructor(
     app: App,
     plugin: ProgrammaticBases,
@@ -128,17 +142,32 @@ export class TemplateConfigurationModal extends ParamConfigModal {
     this.outputName = template.toName();
   }
 
+  /** Total pages = one per param source + the output location page. */
   protected get totalPages(): number { return this.paramPages.length + 1; }
+
+  /** True when the user is on the output location page (last page). */
   protected get isOnFinalPage(): boolean { return this.currentPage === this.paramPages.length; }
+
+  /** Label for the primary action button on the final page. */
   protected get finalButtonLabel(): string { return 'Create'; }
+
+  /** Title displayed in the modal header. */
   protected get modalTitle(): string { return 'Create base from template'; }
 
+  /**
+   * The resolved vault-relative output path, combining folder and filename.
+   * When no folder is set, returns just the filename.
+   */
   private get outputPath(): string {
     return this.outputFolder
       ? normalizePath(`${this.outputFolder}/${this.outputName}`)
       : this.outputName;
   }
 
+  /**
+   * Renders the output location page: folder suggester and filename input.
+   * Inline validation errors are displayed below the filename field.
+   */
   protected renderFinalContent() {
     this.contentEl.createEl('p', {
       text: `Step ${this.currentPage + 1} of ${this.totalPages}`,
@@ -167,6 +196,10 @@ export class TemplateConfigurationModal extends ParamConfigModal {
     this.renderFieldError(fileNameSetting, this.pageErrors['outputName']);
   }
 
+  /**
+   * Called when the user clicks "Create" on the output location page.
+   * Validates the output name; if valid, proceeds to {@link create}.
+   */
   protected onFinalAction() {
     const errors = this.validateOutputPage();
     if (Object.keys(errors).length > 0) {
@@ -178,11 +211,27 @@ export class TemplateConfigurationModal extends ParamConfigModal {
     this.create();
   }
 
+  /**
+   * Validates the output location page fields.
+   *
+   * @returns A map of field name → error message for any invalid fields,
+   *   or `{}` if all fields are valid.
+   */
   private validateOutputPage(): Record<string, string> {
     if (!this.outputName) return { outputName: 'Required' };
     return {};
   }
 
+  /**
+   * Evaluates the template and writes the output file.
+   *
+   * On first call (`overwrite = false`), checks whether the target path already
+   * exists. If so, opens {@link ConfirmOverwriteModal} and returns — the modal
+   * will call `create(true)` if the user confirms.
+   *
+   * @param overwrite - When true, uses `writeBaseFromTemplate` (upsert) instead
+   *   of `createBaseFromTemplate` (throws if file exists).
+   */
   private async create(overwrite = false) {
     try {
       if (!overwrite) {
@@ -214,10 +263,16 @@ export class TemplateConfigurationModal extends ParamConfigModal {
  * Asks the user to confirm before overwriting.
  */
 export class ConfirmOverwriteModal extends Modal {
+  /**
+   * @param app - The Obsidian app instance.
+   * @param path - The vault-relative path that already exists, shown in the prompt.
+   * @param onConfirm - Callback invoked when the user clicks "Overwrite".
+   */
   constructor(app: App, private path: string, private onConfirm: () => void) {
     super(app);
   }
 
+  /** Renders the confirmation prompt and Overwrite / Cancel buttons. */
   onOpen() {
     this.titleEl.setText('File already exists');
 
@@ -238,6 +293,7 @@ export class ConfirmOverwriteModal extends Modal {
         .onClick(() => this.close()));
   }
 
+  /** Clears the modal content on close to prevent DOM leaks. */
   onClose() {
     this.contentEl.empty();
   }

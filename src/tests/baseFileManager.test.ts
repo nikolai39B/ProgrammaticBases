@@ -4,16 +4,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TFile } from 'obsidian';                              // ← resolves to __mocks__/obsidian.ts
 import { BaseFileIO } from 'fileManagement/baseFileIO';
 import { BaseConfig } from 'bases/baseConfig';
-import * as yaml from 'js-yaml';
+import * as yaml from 'yaml';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 // obsidian is handled globally via the alias in vitest.config.ts
-// js-yaml is mocked here since it's only relevant to this test file
+// yaml is mocked here since it's only relevant to this test file
 
-vi.mock('js-yaml', () => ({
-  dump: vi.fn((obj: unknown) => `yaml:${JSON.stringify(obj)}`),
-  load: vi.fn(),
+vi.mock('yaml', () => ({
+  stringify: vi.fn((obj: unknown) => `yaml:${JSON.stringify(obj)}`),
+  parse: vi.fn(),
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -91,25 +91,25 @@ describe('BaseFileIO', () => {
     it('reads the file content from the vault', async () => {
       const file = makeTFile();
       vault.getFileByPath.mockReturnValue(file);
-      vi.mocked(yaml.load).mockReturnValue({ views: [{ type: 'table' }] });
+      vi.mocked(yaml.parse).mockReturnValue({ views: [{ type: 'table' }] });
       viewRegistry.deserialize.mockReturnValue({ type: 'table' });
       await manager.readBase('my-base');
       expect(vault.read).toHaveBeenCalledWith(file);
     });
 
-    it('parses the file content with yaml.load', async () => {
+    it('parses the file content with yaml.parse', async () => {
       vault.getFileByPath.mockReturnValue(makeTFile());
       vault.read.mockResolvedValue('views:\n  - type: table');
-      vi.mocked(yaml.load).mockReturnValue({ views: [{ type: 'table' }] });
+      vi.mocked(yaml.parse).mockReturnValue({ views: [{ type: 'table' }] });
       viewRegistry.deserialize.mockReturnValue({ type: 'table' });
       await manager.readBase('my-base');
-      expect(yaml.load).toHaveBeenCalledWith('views:\n  - type: table');
+      expect(yaml.parse).toHaveBeenCalledWith('views:\n  - type: table');
     });
 
     it('deserializes via BaseConfig.deserialize with the view registry', async () => {
       vault.getFileByPath.mockReturnValue(makeTFile());
       const raw = { views: [{ type: 'table' }] };
-      vi.mocked(yaml.load).mockReturnValue(raw);
+      vi.mocked(yaml.parse).mockReturnValue(raw);
       const mockView = { type: 'table' };
       viewRegistry.deserialize.mockReturnValue(mockView);
       const result = await manager.readBase('my-base');

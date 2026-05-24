@@ -2,61 +2,68 @@
 
 ## Status
 
-618 tests passing. The create and update flows are both fully implemented with multi-page param modals.
+614 tests passing. Lint cleanup in progress — submission-blocking issues partially resolved.
 
 ---
 
 ## What was just completed
 
-### `ParamConfigModal` base class refactor
-Shared param modal logic extracted from `createBaseFromTemplate.ts` into a new abstract base class `ParamConfigModal` (`src/commands/paramConfigModal.ts`). Both modals now extend it:
+### `js-yaml` → `yaml` migration
+Migrated from the abandoned `js-yaml` package to the actively maintained `yaml` package (eemeli). Resolves the `depend/ban-dependencies` ESLint error that was blocking submission.
 
-- `TemplateConfigurationModal` — adds an output-location final page; "Create" button
-- `UpdateConfigurationModal` — no output-location page; "Update" button appears on last param page (or immediately if no params)
+**API changes applied across all files:**
+- `yaml.load(str, opts)` → `yaml.parse(str, opts)`
+- `yaml.dump(obj, { lineWidth: -1 })` → `yaml.stringify(obj, { lineWidth: 0 })`
+- Custom tag system rewritten: `new yaml.Type('!tag', { kind, construct })` → plain object `{ tag: '!tag', resolve }` passed via `customTags` option
+- `yaml.CORE_SCHEMA.extend([...])` pattern eliminated — tags passed directly to each `parse()` call
+- `yaml.parse` uses CORE schema by default, so no special schema needed to prevent ISO date coercion (replaces the previous `{ schema: yaml.CORE_SCHEMA }` workaround)
 
-### Update command redesign
-`updateBaseFromTemplate.ts` rewritten. Old flow: simple confirm dialog → re-evaluate from scratch. New flow:
-1. Read `pb-metadata.template` and `pb-metadata.params` from the active `.base` file
-2. Resolve template source via `templateSourceResolver.parseRef`
-3. Harvest params from template + components
-4. Open `UpdateConfigurationModal` pre-filled with the cached params
-5. On confirm, call `templateFileIO.writeBaseFromTemplate` directly
+**Files changed:** `templateEvaluator.ts`, `baseFileIO.ts`, `updateBaseFromTemplate.ts`, `debug/index.ts`, `baseConfig.ts` (removed unused import), and test files `baseFileManager.test.ts`, `roundtrip.test.ts`, `updateBaseFromTemplate.test.ts`.
 
-**Date parsing fix**: `yaml.load` now uses `yaml.CORE_SCHEMA` to prevent ISO date strings (e.g. `2026-04-23`) from being coerced to `Date` objects.
+### `!fnc` removed, `!exp` replaced with string interpolation
+Dropped `!fnc` entirely (full JS function-body eval — no safe replacement). Replaced `!exp` JS expression eval with `{{paramName}}` string interpolation:
 
-### `VaultTemplateSource` pure-identifier refactor
-`VaultTemplateSource` and `TemplateSourceResolver` are now pure path/identifier logic with no `App` or `TFile` dependencies. All vault I/O lives in `TemplateEvaluator.resolveContent`.
+```yaml
+filter: !exp '{{folderPath}}/tasks'   # → e.g. "Notes/tasks"
+name: !exp '{{prefix}}-dashboard'     # → e.g. "work-dashboard"
+```
 
-### `toName()` method
-Both source types now have `toName()` for display-friendly names:
-- `VaultTemplateSource`: leaf filename stripped of folder and `.yaml` extension
-- `QualifiedTemplateSource`: just `templateName`
+**Important authoring note:** `!exp` values containing `{{` must be **quoted** in YAML (single or double quotes), since `{` is YAML's flow-mapping delimiter.
 
-### `defaultExpr` support
-Param specs can declare `defaultExpr: "<js expression>"` evaluated at modal-open time (no params context). Fallback chain: expr result → static `default` → type fallback.
+Resolves the `no-implied-eval` and `no-unsafe-call` ESLint errors from `templateEvaluator.ts`.
 
-### `pb-content` unwrapping fix
-`unwrapContent` now strips `pb-content:` wrapper after stripping `pb-metadata:`, fixing a "no deserializer registered for view type undefined" error when vault components use `pb-content`.
+### `defaultExpr` replaced with named tokens
+`evalDefaultExpr` in `paramConfigModal.ts` no longer uses `new Function()`. Now resolves a fixed set of built-in tokens:
+
+| Token | Resolves to |
+|---|---|
+| `{{today}}` | `YYYY-MM-DD` (current date) |
+| `{{now}}` | `YYYY-MM-DDTHH:MM` (current datetime, datetime-local format) |
+
+Unknown tokens return `undefined`, triggering fallback to `spec.default` → type zero value. Resolves the remaining `no-implied-eval` ESLint error from `paramConfigModal.ts`.
 
 ---
 
-## Next steps
+## Remaining lint errors (next session)
 
-### 1. Pending todos (from project-log.md)
+458 errors → now fewer after the above changes. Remaining categories to fix:
 
-- **Handle params declared by multiple templates under the same name** — currently, when the template and a component both declare a param with the same name, they appear on separate pages with separate values. There may be a case for merging/splitting these.
+- `no-static-styles-assignment` — inline `element.style.*` in `settings.ts`, `paramConfigModal.ts`, `createBaseFromTemplate.ts`
+- `no-misused-promises` / `no-floating-promises` — async `onChooseSuggestion` in `createBaseFromTemplate.ts`, floating promises in `main.ts`, `updateBaseFromTemplate.ts`
+- `no-console` — `console.log` in `main.ts`, `debug/index.ts`, `debug/debugSource.ts`
+- `no-namespace` — namespaces in `filter.ts`, `property.ts`, `propertyOrder.ts`
+- `unbound-method` — static methods passed as callbacks in `baseConfig.ts`, `debug/index.ts`, test files
+- `no-unnecessary-type-assertion` — stale `as` casts in `templateParams.ts`, `paramConfigModal.ts`, `filter.ts`
+- `import/no-extraneous-dependencies` — `debug` import in `api.ts` (not in package.json)
+- `__mocks__/obsidian.ts` parsing error — needs `allowDefaultProject` in eslint config
+- `ui/sentence-case` — one button label in `paramConfigModal.ts`
+- Unused imports/warnings — scattered across source and test files
+- Test file `unsafe-any` errors — multiple test files
 
-### 2. Interactive testing
-
-- Full create flow with debug template: all param types, `defaultExpr` for date
-- Full update flow: open existing `.base`, run update command, verify modal pre-fills correctly, verify date/datetime fields are populated as strings
-- Nested component params appearing on correct pages
-- External source templates (qualified `!sub` refs)
-- `task-base` dashboard creation and update
-
-### 3. `task-base` integration
-
-See "What Needs to Happen in `task-base`" section below.
+Also still needed for submission:
+- README needs rewriting (currently has sample plugin boilerplate)
+- `manifest.json` — author/authorUrl are still "Obsidian"/"obsidian.md"
+- `package.json` — name is still "obsidian-sample-plugin"
 
 ---
 
@@ -79,8 +86,23 @@ See "What Needs to Happen in `task-base`" section below.
 
 ### Two-pass template evaluation
 
-- **Pass 1** (`collectParams`): resolves `!sub`, no-ops `!exp`/`!fnc`, harvests `pb-metadata.params` from template + all components → `HarvestedParams` shown in modal
-- **Pass 2** (`evaluateTemplate`): full evaluation with user-supplied `ResolvedParams`; stamps `pb-metadata.template` (+ `pb-metadata.params` if non-empty)
+- **Pass 1** (`collectParams`): resolves `!sub`, no-ops `!exp`, harvests `pb-metadata.params` from template + all components → `HarvestedParams` shown in modal
+- **Pass 2** (`evaluateTemplate`): resolves `!sub`, interpolates `!exp` `{{param}}` placeholders with user-supplied `ResolvedParams`; stamps `pb-metadata.template` (+ `pb-metadata.params` if non-empty)
+
+### `!exp` interpolation syntax
+
+Values with `{{...}}` placeholders must be quoted in YAML:
+```yaml
+filter: !exp '{{folderPath}}/tasks'
+```
+Plain strings (no `{{`) can be unquoted:
+```yaml
+label: !exp some static text
+```
+
+### `defaultExpr` tokens
+
+Param specs can declare `defaultExpr: "{{today}}"` or `defaultExpr: "{{now}}"` to pre-fill date/datetime fields at modal-open time. Unknown tokens fall back to `spec.default`, then type zero value.
 
 ---
 

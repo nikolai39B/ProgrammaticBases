@@ -147,16 +147,42 @@ describe('TemplateEvaluator.evaluateTemplate (vault source)', () => {
       .rejects.toThrow('Invalid ref path: ../secret.yaml');
   });
 
-  it('evaluates a scalar value', async () => {
-    const { evaluator, app } = makeEvaluator({ 'test.yaml': 'hello' });
-    const result = await evaluator.evaluateTemplate(vaultSrc('test.yaml'));
-    expect(result).toBe('hello');
+  it('throws when the template evaluates to a scalar', async () => {
+    const { evaluator } = makeEvaluator({ 'test.yaml': 'hello' });
+    await expect(evaluator.evaluateTemplate(vaultSrc('test.yaml')))
+      .rejects.toThrow('Template "test.yaml" must evaluate to a YAML object');
   });
 
-  it('evaluates an array', async () => {
-    const { evaluator, app } = makeEvaluator({ 'test.yaml': '- a\n- b\n- c' });
-    const result = await evaluator.evaluateTemplate(vaultSrc('test.yaml'));
-    expect(result).toEqual(['a', 'b', 'c']);
+  it('throws when the template evaluates to an array', async () => {
+    const { evaluator } = makeEvaluator({ 'test.yaml': '- a\n- b\n- c' });
+    await expect(evaluator.evaluateTemplate(vaultSrc('test.yaml')))
+      .rejects.toThrow('Template "test.yaml" must evaluate to a YAML object');
+  });
+
+  it('resolves a !sub component that is a bare scalar', async () => {
+    const { evaluator } = makeEvaluator(
+      {
+        'base.yaml': 'filter: !sub scalar-comp',
+        'components/scalar-comp.yaml': 'status == "done"',
+      },
+      new Map(),
+      'components',
+    );
+    const result = await evaluator.evaluateTemplate(vaultSrc('base.yaml')) as unknown as Record<string, unknown>;
+    expect(result.filter).toBe('status == "done"');
+  });
+
+  it('resolves a !sub component that is a bare array', async () => {
+    const { evaluator } = makeEvaluator(
+      {
+        'base.yaml': 'tags: !sub array-comp',
+        'components/array-comp.yaml': '- work\n- active',
+      },
+      new Map(),
+      'components',
+    );
+    const result = await evaluator.evaluateTemplate(vaultSrc('base.yaml')) as unknown as Record<string, unknown>;
+    expect(result.tags).toEqual(['work', 'active']);
   });
 
   it('throws when an unqualified !sub component is not found in the vault folder', async () => {
@@ -290,91 +316,53 @@ describe('TemplateEvaluator.evaluateTemplate (external source)', () => {
 // ─── !exp tag ─────────────────────────────────────────────────────────────────
 
 describe('TemplateEvaluator — !exp tag', () => {
-  it('evaluates a simple expression with params in scope', async () => {
+  // Note: !exp values containing {{ must be quoted in YAML since { is a
+  // flow-mapping delimiter. E.g.  filter: !exp "{{folder}}/tasks"
+
+  it('interpolates a param value into a string', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': 'value: !exp params.taskLocation' } }],
+      ['test', { name: 'test', templates: { 'main': "value: !exp '{{taskLocation}}/boards'" } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.evaluateTemplate(
       new QualifiedTemplateSource('test', 'main'),
       { taskLocation: 'Tasks' },
     ) as unknown as Record<string, unknown>;
-    expect(result.value).toBe('Tasks');
+    expect(result.value).toBe('Tasks/boards');
   });
 
-  it('evaluates an arithmetic expression', async () => {
+  it('substitutes multiple params in one expression', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': 'value: !exp params.count * 2' } }],
+      ['test', { name: 'test', templates: { 'main': "value: !exp '{{prefix}}-{{suffix}}'" } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.evaluateTemplate(
       new QualifiedTemplateSource('test', 'main'),
-      { count: 5 },
+      { prefix: 'foo', suffix: 'bar' },
     ) as unknown as Record<string, unknown>;
-    expect(result.value).toBe(10);
+    expect(result.value).toBe('foo-bar');
   });
 
-  it('returns null for !exp when params is empty and expression references params', async () => {
+  it('replaces missing params with empty string', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': 'value: !exp params.x ?? null' } }],
+      ['test', { name: 'test', templates: { 'main': "value: !exp 'hello {{missing}} world'" } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
-    const result = await evaluator.evaluateTemplate(new QualifiedTemplateSource('test', 'main')) as unknown as Record<string, unknown>;
-    expect(result.value).toBeNull();
+    const result = await evaluator.evaluateTemplate(
+      new QualifiedTemplateSource('test', 'main'),
+    ) as unknown as Record<string, unknown>;
+    expect(result.value).toBe('hello  world');
   });
 
-  it('throws a descriptive error for syntax errors', async () => {
+  it('returns the string unchanged when no placeholders are present', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': 'value: !exp a @@ b' } }],
+      ['test', { name: 'test', templates: { 'main': 'value: !exp just a string' } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
-    await expect(evaluator.evaluateTemplate(new QualifiedTemplateSource('test', 'main')))
-      .rejects.toThrow('!exp evaluation failed');
-  });
-});
-
-// ─── !fnc tag ─────────────────────────────────────────────────────────────────
-
-describe('TemplateEvaluator — !fnc tag', () => {
-  it('evaluates a function body with params in scope', async () => {
-    const yaml = "value: !fnc |\n  if (params.flag) { return 'yes'; } return 'no';";
-    const sources = new Map([['test', { name: 'test', templates: { 'main': yaml } }]]);
-    const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.evaluateTemplate(
       new QualifiedTemplateSource('test', 'main'),
-      { flag: true },
     ) as unknown as Record<string, unknown>;
-    expect(result.value).toBe('yes');
-  });
-
-  it('evaluates a multi-line block scalar function body', async () => {
-    const yaml = 'value: !fnc |\n  return params.items.length;';
-    const sources = new Map([['test', { name: 'test', templates: { 'main': yaml } }]]);
-    const { evaluator } = makeEvaluator({}, sources);
-    const result = await evaluator.evaluateTemplate(
-      new QualifiedTemplateSource('test', 'main'),
-      { items: ['a', 'b'] as any },
-    ) as unknown as Record<string, unknown>;
-    expect(result.value).toBe(2);
-  });
-
-  it('resolves a Promise returned from !fnc via resolvePromises', async () => {
-    const yaml = 'value: !fnc |\n  return Promise.resolve(params.x);';
-    const sources = new Map([['test', { name: 'test', templates: { 'main': yaml } }]]);
-    const { evaluator } = makeEvaluator({}, sources);
-    const result = await evaluator.evaluateTemplate(
-      new QualifiedTemplateSource('test', 'main'),
-      { x: 42 },
-    ) as unknown as Record<string, unknown>;
-    expect(result.value).toBe(42);
-  });
-
-  it('throws a descriptive error for runtime errors', async () => {
-    const yaml = 'value: !fnc |\n  throw new Error("intentional");';
-    const sources = new Map([['test', { name: 'test', templates: { 'main': yaml } }]]);
-    const { evaluator } = makeEvaluator({}, sources);
-    await expect(evaluator.evaluateTemplate(new QualifiedTemplateSource('test', 'main')))
-      .rejects.toThrow('!fnc evaluation failed');
+    expect(result.value).toBe('just a string');
   });
 });
 
@@ -386,7 +374,7 @@ describe('TemplateEvaluator.collectParams (vault source)', () => {
       'templates/board.yaml':
         'pb-metadata:\n  params:\n    taskLocation:\n      type: folder\nviews: []',
     });
-    const result = await evaluator.collectParams(vaultSrc('templates/board.yaml'));
+    const result = await evaluator.collectTemplateParams(vaultSrc('templates/board.yaml'));
     expect(result.taskLocation).toBeDefined();
     expect(result.taskLocation!.specs['']!.type).toBe('folder');
     expect(Object.keys(result.taskLocation!.specs)).toContain('');
@@ -401,7 +389,7 @@ describe('TemplateEvaluator.collectParams (vault source)', () => {
       new Map(),
       'components',
     );
-    const result = await evaluator.collectParams(vaultSrc('templates/board.yaml'));
+    const result = await evaluator.collectTemplateParams(vaultSrc('templates/board.yaml'));
     expect(result.x).toBeDefined();
     expect(Object.keys(result.x!.specs)).toContain('');
     expect(result.y).toBeDefined();
@@ -410,7 +398,7 @@ describe('TemplateEvaluator.collectParams (vault source)', () => {
 
   it('throws when the file does not exist', async () => {
     const { evaluator, app } = makeEvaluator({});
-    await expect(evaluator.collectParams(vaultSrc('missing.yaml')))
+    await expect(evaluator.collectTemplateParams(vaultSrc('missing.yaml')))
       .rejects.toThrow('File not found: missing.yaml');
   });
 });
@@ -421,7 +409,7 @@ describe('TemplateEvaluator.collectParams (external source)', () => {
   it('returns empty HarvestedParams for content with no pb-metadata.params', async () => {
     const sources = new Map([['test', { name: 'test', templates: { 'main': 'views: []' } }]]);
     const { evaluator } = makeEvaluator({}, sources);
-    const result = await evaluator.collectParams(new QualifiedTemplateSource('test', 'main'));
+    const result = await evaluator.collectTemplateParams(new QualifiedTemplateSource('test', 'main'));
     expect(result).toEqual({});
   });
 
@@ -432,7 +420,7 @@ describe('TemplateEvaluator.collectParams (external source)', () => {
       sources,
       'components',
     );
-    const result = await evaluator.collectParams(new QualifiedTemplateSource('test', 'main'));
+    const result = await evaluator.collectTemplateParams(new QualifiedTemplateSource('test', 'main'));
     expect(result.taskLocation).toBeDefined();
     expect(result.taskLocation!.specs['comp']!.type).toBe('folder');
     expect(Object.keys(result.taskLocation!.specs)).toContain('comp');
@@ -448,7 +436,7 @@ describe('TemplateEvaluator.collectParams (external source)', () => {
       sources,
       'components',
     );
-    const result = await evaluator.collectParams(new QualifiedTemplateSource('test', 'main'));
+    const result = await evaluator.collectTemplateParams(new QualifiedTemplateSource('test', 'main'));
     expect(result.x).toBeDefined();
     const srcPath = Object.keys(result.x!.specs)[0]!;
     expect(srcPath).toContain('outer');
@@ -465,17 +453,17 @@ describe('TemplateEvaluator.collectParams (external source)', () => {
       sources,
       'components',
     );
-    const result = await evaluator.collectParams(new QualifiedTemplateSource('test', 'main'));
+    const result = await evaluator.collectTemplateParams(new QualifiedTemplateSource('test', 'main'));
     expect(result.loc).toBeDefined();
     expect(Object.keys(result.loc!.specs)).toHaveLength(2);
     expect(result.loc!.specs['a']!.type).toBe('folder');
     expect(result.loc!.specs['b']!.type).toBe('string');
   });
 
-  it('treats !exp and !fnc as no-ops during harvest', async () => {
-    const sources = new Map([['test', { name: 'test', templates: { 'main': 'value: !exp params.x' } }]]);
+  it('treats !exp as a no-op during harvest', async () => {
+    const sources = new Map([['test', { name: 'test', templates: { 'main': "value: !exp '{{x}}'" } }]]);
     const { evaluator } = makeEvaluator({}, sources);
-    const result = await evaluator.collectParams(new QualifiedTemplateSource('test', 'main'));
+    const result = await evaluator.collectTemplateParams(new QualifiedTemplateSource('test', 'main'));
     expect(result).toEqual({});
   });
 });

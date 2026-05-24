@@ -3,7 +3,7 @@
 import { App, TFile, normalizePath } from 'obsidian';
 import { BaseConfig } from 'bases/baseConfig';
 import { ViewRegistry } from 'views/viewRegistry';
-import * as yaml from 'js-yaml';
+import * as yaml from 'yaml';
 
 /**
  * Handles vault I/O for `.base` files — read, create, and write.
@@ -40,7 +40,7 @@ export class BaseFileIO {
     if (!file) throw new Error(`File not found: ${resolvedPath}`);
 
     const content = await this.app.vault.read(file);
-    const raw = yaml.load(content) as Record<string, unknown>;
+    const raw = yaml.parse(content) as Record<string, unknown>;
     return BaseConfig.deserialize(raw, this.getViewRegistry());
   }
 
@@ -61,7 +61,7 @@ export class BaseFileIO {
     }
 
     await this.ensureDirectoryExists(resolvedPath);
-    await this.app.vault.create(resolvedPath, yaml.dump(config.serialize(), { lineWidth: -1 }));
+    await this.app.vault.create(resolvedPath, yaml.stringify(config.serialize(), { lineWidth: 0 }));
   }
 
   /**
@@ -80,9 +80,9 @@ export class BaseFileIO {
     await this.ensureDirectoryExists(resolvedPath);
 
     if (existingFile instanceof TFile) {
-        await this.app.vault.modify(existingFile, yaml.dump(config.serialize(), { lineWidth: -1 }));
+        await this.app.vault.modify(existingFile, yaml.stringify(config.serialize(), { lineWidth: 0 }));
     } else {
-        await this.app.vault.create(resolvedPath, yaml.dump(config.serialize(), { lineWidth: -1 }));
+        await this.app.vault.create(resolvedPath, yaml.stringify(config.serialize(), { lineWidth: 0 }));
     }
   }
 

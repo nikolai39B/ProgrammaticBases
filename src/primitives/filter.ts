@@ -118,7 +118,7 @@ export namespace Filter {
   export function deserialize(raw: unknown): Filter {
     // If the raw object is a string, use it directly
     if (typeof raw === 'string') {
-      return raw as FilterLeaf;
+      return raw;
     }
 
     // Othewise, deserialize

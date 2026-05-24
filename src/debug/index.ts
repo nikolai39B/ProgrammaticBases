@@ -1,4 +1,4 @@
-import * as yaml from 'js-yaml';
+import * as yaml from 'yaml';
 import ProgrammaticBases from 'main';
 import { registerDebugSource } from 'debug/debugSource';
 import { BaseConfig } from 'bases/baseConfig';
@@ -37,16 +37,16 @@ export default class DebugUtils {
   }
   
   static printSuccess() {
-    console.log("success!!");
+    console.debug("success!!");
   }
   
   static printFailure() {
-    console.log("failure :(");
+    console.debug("failure :(");
   }
   
   static async promiseTesting(succeed: boolean) {
     const myPromise = new Promise<void>((resolve, reject) => {
-      console.log(`input value: ${succeed}`);
+      console.debug(`input value: ${succeed}`);
       if (succeed) {
         resolve();
       } else {
@@ -85,14 +85,14 @@ export default class DebugUtils {
     }
     
   
-    console.log(v)
-    //console.log(Object.entries(v))
+    console.debug(v)
+    //console.debug(Object.entries(v))
   
-    console.log(yaml.dump(v, { lineWidth: -1 }));
-    //console.log(yaml.dump(Object.entries(v), { lineWidth: -1 }));
+    console.debug(yaml.stringify(v, { lineWidth: 0 }));
+    //console.debug(yaml.dump(Object.entries(v), { lineWidth: -1 }));
   
-    console.log(yaml.load(yaml.dump(v, { lineWidth: -1 })));
-    //console.log(yaml.load(yaml.dump(Object.entries(v), { lineWidth: -1 })));
+    console.debug(yaml.parse(yaml.stringify(v, { lineWidth: 0 })));
+    //console.debug(yaml.load(yaml.dump(Object.entries(v), { lineWidth: -1 })));
   }
   
   static registerDebugSource = registerDebugSource;
@@ -101,16 +101,16 @@ export default class DebugUtils {
     
     const path = "Bases\\testBase.base";
     const yamlString = await ProgrammaticBases.instance.app.vault.adapter.read(path);
-    const yamlObj1 = yaml.load(yamlString);
+    const yamlObj1 = yaml.parse(yamlString);
     const baseConfig = BaseConfig.deserialize(yamlObj1 as Record<string, unknown>, 
       ProgrammaticBases.instance.viewRegistry
     );
     const yamlObj2 = baseConfig.serialize();
   
-    const yamlStringTr = yaml.dump(yamlObj2, { lineWidth: -1 });
+    const yamlStringTr = yaml.stringify(yamlObj2, { lineWidth: 0 });
       
-    console.log(yamlString)
-    console.log(baseConfig);
-    console.log(yamlStringTr);
+    console.debug(yamlString)
+    console.debug(baseConfig);
+    console.debug(yamlStringTr);
   }
 }

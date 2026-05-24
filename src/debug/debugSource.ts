@@ -113,5 +113,5 @@ export function registerDebugSource(): void {
     },
     { append: true },
   );
-  console.log('[programmatic-bases] debug source registered');
+  console.debug('[programmatic-bases] debug source registered');
 }

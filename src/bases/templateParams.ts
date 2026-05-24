@@ -151,7 +151,7 @@ export function mergeHarvestedParams(
     if (!into[name]) {
       into[name] = { specs: {} };
     }
-    into[name]!.specs[sourcePath] = spec;
+    into[name].specs[sourcePath] = spec;
   }
 }
 

@@ -1,4 +1,4 @@
-import * as yaml from 'js-yaml';
+import * as yaml from 'yaml';
 import { Notice, Command } from 'obsidian';
 import ProgrammaticBases from 'main';
 import { BaseMetadataUtils } from 'bases/baseMetadata';
@@ -21,7 +21,7 @@ export function updateBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
 
       // Load the base yaml
       const content = await plugin.app.vault.read(activeFile);
-      const raw = yaml.load(content, { schema: yaml.CORE_SCHEMA }) as Record<string, unknown>;
+      const raw = yaml.parse(content) as Record<string, unknown>;
 
       // Deserialize the metadata to get the template file ref
       const metaRaw = raw[BaseMetadataUtils.KEY] as Record<string, unknown> | undefined;
@@ -35,7 +35,7 @@ export function updateBaseFromTemplateCommand(plugin: ProgrammaticBases): Comman
       const source = plugin.templateSourceResolver.parseRef(meta.template, 'base');
 
       // Get the parameters from the template
-      const harvested = await plugin.templateEvaluator.collectParams(source);
+      const harvested = await plugin.templateEvaluator.collectTemplateParams(source);
 
       // Create the modal
       new UpdateConfigurationModal(

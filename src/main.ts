@@ -71,7 +71,7 @@ export default class ProgrammaticBases extends Plugin {
   private dependencyManager: PluginDependencyManager;
 
   async onload() {
-    this.loadPlugin();
+    void this.loadPlugin();
   }
 
   private async loadPlugin() {
@@ -109,12 +109,12 @@ export default class ProgrammaticBases extends Plugin {
       this.addSettingTab(new ProgrammaticBasesSettingTab(this.app, this));
 
       // Notify load success
-      console.log("ProgrammaticBases loaded");
+      console.debug("ProgrammaticBases loaded");
       this.app.workspace.trigger("programmatic-bases:loaded");
     } catch (e) {
       // Notify load failure
       const error = e instanceof Error ? e : new Error(String(e));
-      console.log("ProgrammaticBases failed to load");
+      console.error("ProgrammaticBases failed to load");
       this.app.workspace.trigger("programmatic-bases:loadFailed", error);
       throw error;
     }

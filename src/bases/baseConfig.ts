@@ -6,7 +6,6 @@ import { FilterGroup } from 'primitives/filter';
 import { Formula } from 'primitives/formula';
 import { PropertyDisplay } from 'primitives/propertyDisplay';
 import { ViewConfig } from 'views/viewConfig';
-import * as yaml from 'js-yaml';
 import { SerializationUtils } from 'utils/serializationUtils';
 import { ViewRegistry } from 'views/viewRegistry';
 

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
+import * as yaml from 'yaml';
 import { describe, it, expect } from 'vitest';
 import { BaseConfig } from 'bases/baseConfig';
 import { ViewRegistry } from 'views/viewRegistry';
@@ -21,7 +21,7 @@ describe('BaseConfig round trip', () => {
     // Read from disk
     const filePath = path.resolve(__dirname, 'fixtures/exampleBase.yaml');
     const yamlString = fs.readFileSync(filePath, 'utf-8');
-    const yamlObj1 = yaml.load(yamlString);
+    const yamlObj1 = yaml.parse(yamlString);
 
     // Round trip
     const baseConfig = BaseConfig.deserialize(

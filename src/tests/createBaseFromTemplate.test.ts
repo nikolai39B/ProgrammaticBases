@@ -63,7 +63,7 @@ function makePlugin(overrides: {
   };
 
   const templateEvaluator = {
-    collectParams: vi.fn().mockResolvedValue({}),
+    collectTemplateParams: vi.fn().mockResolvedValue({}),
   };
 
   const templateFileIO = {
@@ -204,7 +204,7 @@ describe('TemplatePicker', () => {
 
   describe('onChooseSuggestion()', () => {
     it('opens TemplateConfigurationModal when the template has no params', async () => {
-      plugin.templateEvaluator.collectParams.mockResolvedValue({});
+      plugin.templateEvaluator.collectTemplateParams.mockResolvedValue({});
       const openSpy = vi.spyOn(Modal.prototype, 'open');
       const picker = new TemplatePicker(plugin.app, plugin);
       await picker.onChooseSuggestion(makeVaultTemplate(makeTFile()));
@@ -216,7 +216,7 @@ describe('TemplatePicker', () => {
       const harvested: HarvestedParams = {
         taskLocation: { specs: { '': { type: 'folder' } } },
       };
-      plugin.templateEvaluator.collectParams.mockResolvedValue(harvested);
+      plugin.templateEvaluator.collectTemplateParams.mockResolvedValue(harvested);
       const openSpy = vi.spyOn(Modal.prototype, 'open');
       const picker = new TemplatePicker(plugin.app, plugin);
       await picker.onChooseSuggestion(makeVaultTemplate(makeTFile()));
@@ -315,33 +315,33 @@ describe('TemplateConfigurationModal', () => {
       expect((modal as any).values['x']).toBe('hello');
     });
 
-    it('pre-fills defaultExpr result when defaultExpr is present', () => {
+    it('pre-fills {{today}} token as a YYYY-MM-DD date string', () => {
       const harvested: HarvestedParams = {
-        x: { specs: { '': { type: 'string', defaultExpr: '"computed"' } } },
+        x: { specs: { '': { type: 'date', defaultExpr: '{{today}}' } } },
       };
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
-      expect((modal as any).values['x']).toBe('computed');
+      expect((modal as any).values['x']).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
-    it('defaultExpr takes precedence over default', () => {
+    it('defaultExpr token takes precedence over static default', () => {
       const harvested: HarvestedParams = {
-        x: { specs: { '': { type: 'string', default: 'static', defaultExpr: '"dynamic"' } } },
+        x: { specs: { '': { type: 'date', default: '2000-01-01', defaultExpr: '{{today}}' } } },
       };
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
-      expect((modal as any).values['x']).toBe('dynamic');
+      expect((modal as any).values['x']).not.toBe('2000-01-01');
     });
 
-    it('falls back to static default when defaultExpr throws', () => {
+    it('falls back to static default when defaultExpr token is unrecognized', () => {
       const harvested: HarvestedParams = {
-        x: { specs: { '': { type: 'string', default: 'fallback', defaultExpr: 'throw new Error("bad")' } } },
+        x: { specs: { '': { type: 'string', default: 'fallback', defaultExpr: '{{unknown}}' } } },
       };
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
       expect((modal as any).values['x']).toBe('fallback');
     });
 
-    it('falls back to empty string when defaultExpr throws and no static default', () => {
+    it('falls back to empty string when defaultExpr token is unrecognized and no static default', () => {
       const harvested: HarvestedParams = {
-        x: { specs: { '': { type: 'string', defaultExpr: 'throw new Error("bad")' } } },
+        x: { specs: { '': { type: 'string', defaultExpr: '{{unknown}}' } } },
       };
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, harvested);
       expect((modal as any).values['x']).toBe('');
