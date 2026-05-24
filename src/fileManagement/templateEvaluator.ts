@@ -21,15 +21,15 @@ import {
 import { ViewRegistry } from 'views/viewRegistry';
 
 /**
- * Evaluates YAML template strings with custom tag resolution (`!sub`, `!exp`, `!fnc`).
+ * Evaluates YAML template strings with custom tag resolution (`!sub`, `!param`).
  *
  * Files use an optional `pb-metadata:` wrapper. When present, `pb-metadata` is
  * stripped and all remaining top-level keys are used as the resolved value.
  *
  * **Two-pass usage:**
  * - Pass 1 (`collectParams`): resolves `!sub` only to collect all declared params
- *   from the template and every nested component. `!exp` is a no-op.
- * - Pass 2 (`evaluateTemplate`): resolves `!sub` and interpolates `!exp` placeholders with
+ *   from the template and every nested component. `!param` is a no-op.
+ * - Pass 2 (`evaluateTemplate`): resolves `!sub` and interpolates `!param` placeholders with
  *   the user-supplied `resolvedParams`.
  *
  * Unqualified `!sub` refs (e.g. `!sub filter/isTask`) are resolved against the
@@ -161,7 +161,7 @@ export class TemplateEvaluator {
   /**
    * Core harvest function (Pass 1). Fetches content for `source`, reads
    * `pb-metadata.params`, then recurses into `!sub` components to collect
-   * their params too. `!exp` is a no-op.
+   * their params too. `!param` is a no-op.
    *
    * @param source - The source to harvest params from.
    * @param visited - Refs already on the current call stack; used for cycle detection.
@@ -212,14 +212,14 @@ export class TemplateEvaluator {
    *
    * - Takes no `visited` set — cycle detection is only meaningful for
    *   components; the root always starts fresh.
-   * - Hardcodes `sourcePath: ''` — `!exp` params at the template level
+   * - Hardcodes `sourcePath: ''` — `!param` params at the template level
    *   are always unscoped.
    * - Validates that the resolved value is a non-null, non-array object
    *   before casting, so callers receive a typed `Record<string, unknown>`
    *   rather than `unknown`.
    *
    * @param source - The root template source to evaluate.
-   * @param resolvedParams - Flat param map passed to `!exp` interpolation.
+   * @param resolvedParams - Flat param map passed to `!param` interpolation.
    * @returns The unwrapped, fully resolved template object.
    * @throws If the template does not evaluate to a YAML mapping.
    */
@@ -258,7 +258,7 @@ export class TemplateEvaluator {
    * @param source - The component source to evaluate.
    * @param visited - Refs already on the current call stack; used for cycle detection.
    * @param resolvedParams - Flat param map for the whole evaluation run.
-   * @param sourcePath - Path of this component, used to scope `!exp` param lookups
+   * @param sourcePath - Path of this component, used to scope `!param` param lookups
    *   and build child paths for nested `!sub` refs.
    * @returns The unwrapped, fully resolved YAML value for this component.
    * @throws If a circular `!sub` reference is detected.
@@ -289,7 +289,7 @@ export class TemplateEvaluator {
    *
    * - `!sub <ref>` — recurses into the referenced component to collect its
    *   `pb-metadata.params` declarations, accumulating them into `discoveredParams`.
-   * - `!exp <template>` — no-op; returns `null` so the tree resolves cleanly
+   * - `!param <template>` — no-op; returns `null` so the tree resolves cleanly
    *   without needing actual param values.
    *
    * @param visited - Refs already on the current call stack; passed down to
@@ -318,8 +318,8 @@ export class TemplateEvaluator {
         return this.collectTemplateParamsInternal(source, visited, discoveredParams, childPath, true);
       },
     };
-    // !exp is a no-op during harvest — return null so the tree resolves cleanly
-    return [subTag, { tag: '!exp', resolve: () => null }];
+    // !param is a no-op during harvest — return null so the tree resolves cleanly
+    return [subTag, { tag: '!param', resolve: () => null }];
   }
 
   /**
@@ -328,7 +328,7 @@ export class TemplateEvaluator {
    * - `!sub <ref>` — inlines a component by recursively evaluating it and
    *   returning a Promise. `yaml.parse` places the Promise into the parsed
    *   tree; {@link resolvePromises} awaits the whole tree afterwards.
-   * - `!exp <template>` — interpolates `{{paramName}}` placeholders using
+   * - `!param <template>` — interpolates `{{paramName}}` placeholders using
    *   params scoped to `currentSourcePath`. Unresolved placeholders become
    *   empty strings.
    *
@@ -336,7 +336,7 @@ export class TemplateEvaluator {
    *   to detect cycles in `!sub` chains.
    * @param resolvedParams - The flat param map for the whole evaluation run.
    * @param currentSourcePath - Source path of the file being parsed, used to
-   *   scope param lookups in `!exp` and to build child paths for `!sub`.
+   *   scope param lookups in `!param` and to build child paths for `!sub`.
    * @returns A tuple of `[subTag, expTag]` custom tag handlers for `yaml.parse`.
    */
   private buildYamlTagsForEvaluation(
@@ -359,9 +359,9 @@ export class TemplateEvaluator {
       },
     };
 
-    // Build the !exp tag for inserting a param value
+    // Build the !param tag for inserting a param value
     const expTag = {
-      tag: '!exp',
+      tag: '!param',
       resolve: (template: string): string => {
         // Narrow resolvedParams to keys relevant to this source
         const params = buildScopedParams(resolvedParams, currentSourcePath);

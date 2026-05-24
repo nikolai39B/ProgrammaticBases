@@ -156,7 +156,7 @@ export function mergeHarvestedParams(
 }
 
 /**
- * Builds the `params` object passed to `!exp`/`!fnc` when evaluating
+ * Builds the `params` object passed to `!param` when evaluating
  * nodes at `sourcePath`.
  *
  * At template level (`sourcePath` is empty): exposes plain unprefixed keys.

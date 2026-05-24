@@ -95,13 +95,25 @@ export class TemplatePicker extends SuggestModal<TemplateSource> {
   }
 
   /**
-   * Reads the template's param specs and opens {@link TemplateConfigurationModal}.
-   *
-   * @param source - The template source the user selected.
+   * Called by Obsidian when the user selects a template. Delegates to
+   * {@link openConfigModal} so this override can stay sync (base class expects void).
    */
-  async onChooseSuggestion(source: TemplateSource) {
-    const harvested = await this.plugin.templateEvaluator.collectTemplateParams(source);
-    new TemplateConfigurationModal(this.app, this.plugin, source, harvested).open();
+  onChooseSuggestion(source: TemplateSource) {
+    void this.openConfigModal(source);
+  }
+
+  /**
+   * Collects params from the selected template then opens {@link TemplateConfigurationModal}.
+   * Errors are surfaced to the user via a Notice rather than propagating up.
+   */
+  private async openConfigModal(source: TemplateSource) {
+    try {
+      const harvested = await this.plugin.templateEvaluator.collectTemplateParams(source);
+      new TemplateConfigurationModal(this.app, this.plugin, source, harvested).open();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new Notice(`Failed to load template: ${msg}`);
+    }
   }
 }
 
@@ -169,11 +181,14 @@ export class TemplateConfigurationModal extends ParamConfigModal {
    * Inline validation errors are displayed below the filename field.
    */
   protected renderFinalContent() {
+    // Progress indicator at the top of the page
     this.contentEl.createEl('p', {
       text: `Step ${this.currentPage + 1} of ${this.totalPages}`,
       cls: 'setting-item-description',
     });
 
+    // Folder field — pre-filled with the active file's parent folder (or empty for vault root)
+    // FolderSuggest wires up autocomplete so the user can search existing vault folders
     new Setting(this.contentEl)
       .setName('Folder')
       .setDesc('Vault-relative folder for the new .base file.')
@@ -185,6 +200,8 @@ export class TemplateConfigurationModal extends ParamConfigModal {
           .onChange(value => { this.outputFolder = value.trim(); });
       });
 
+    // File name field — pre-filled with the template name, editable by the user
+    // renderFieldError shows an inline error below this field if validation fails
     const fileNameSetting = new Setting(this.contentEl)
       .setName('File name')
       .addText(text => {
@@ -208,7 +225,8 @@ export class TemplateConfigurationModal extends ParamConfigModal {
       return;
     }
     this.pageErrors = {};
-    this.create();
+    // Not awaited — create() handles its own errors via Notice and closes the modal on success
+    void this.create();
   }
 
   /**
@@ -223,33 +241,47 @@ export class TemplateConfigurationModal extends ParamConfigModal {
   }
 
   /**
+   * Wraps {@link ConfirmOverwriteModal} in a Promise so `create` can await the
+   * user's decision rather than using a callback.
+   *
+   * Resolves `true` if the user confirms, `false` if they cancel or dismiss.
+   */
+  private confirmOverwrite(resolvedPath: string): Promise<boolean> {
+    return new Promise(resolve => {
+      new ConfirmOverwriteModal(
+        this.app,
+        resolvedPath,
+        () => resolve(true),
+        () => resolve(false),
+      ).open();
+    });
+  }
+
+  /**
    * Evaluates the template and writes the output file.
    *
-   * On first call (`overwrite = false`), checks whether the target path already
-   * exists. If so, opens {@link ConfirmOverwriteModal} and returns — the modal
-   * will call `create(true)` if the user confirms.
-   *
-   * @param overwrite - When true, uses `writeBaseFromTemplate` (upsert) instead
-   *   of `createBaseFromTemplate` (throws if file exists).
+   * If the target path already exists, awaits the user's confirmation via
+   * {@link ConfirmOverwriteModal} before proceeding. Aborts silently if the
+   * user cancels or dismisses.
    */
-  private async create(overwrite = false) {
+  private async create() {
     try {
-      if (!overwrite) {
-        const hasExtension = /\.[^/\\]+$/.test(this.outputPath);
-        const resolvedPath = normalizePath(hasExtension ? this.outputPath : `${this.outputPath}.base`);
-        if (this.app.vault.getAbstractFileByPath(resolvedPath) !== null) {
-          new ConfirmOverwriteModal(this.app, resolvedPath, () => this.create(true)).open();
-          return;
-        }
+      // Normalise the path — append .base if the user didn't type an extension
+      const hasExtension = /\.[^/\\]+$/.test(this.outputPath);
+      const resolvedPath = normalizePath(hasExtension ? this.outputPath : `${this.outputPath}.base`);
+
+      // If the file already exists, pause until the user decides
+      const fileExists = this.app.vault.getAbstractFileByPath(resolvedPath) !== null;
+      if (fileExists) {
+        const confirmed = await this.confirmOverwrite(resolvedPath);
+        if (!confirmed) return;
       }
 
-      await (overwrite
-        ? this.plugin.templateFileIO.writeBaseFromTemplate(this.template, this.outputPath, this.values)
-        : this.plugin.templateFileIO.createBaseFromTemplate(this.template, this.outputPath, this.values));
-
-      new Notice(`${overwrite ? 'Overwrote' : 'Created'} ${this.outputPath}.base`);
+      await this.plugin.templateFileIO.writeBaseFromTemplate(this.template, this.outputPath, this.values);
+      new Notice(`${fileExists ? 'Overwrote' : 'Created'} ${this.outputPath}.base`);
       this.close();
     } catch (e) {
+      // Surface the error to the user without closing the modal, so they can correct it
       const msg = e instanceof Error ? e.message : String(e);
       new Notice(`Failed to create base: ${msg}`, 0);
     }
@@ -267,8 +299,14 @@ export class ConfirmOverwriteModal extends Modal {
    * @param app - The Obsidian app instance.
    * @param path - The vault-relative path that already exists, shown in the prompt.
    * @param onConfirm - Callback invoked when the user clicks "Overwrite".
+   * @param onCancel - Callback invoked when the user clicks "Cancel" or dismisses.
    */
-  constructor(app: App, private path: string, private onConfirm: () => void) {
+  constructor(
+    app: App,
+    private path: string,
+    private onConfirm: () => void,
+    private onCancel: () => void,
+  ) {
     super(app);
   }
 
@@ -290,7 +328,10 @@ export class ConfirmOverwriteModal extends Modal {
         }))
       .addButton(btn => btn
         .setButtonText('Cancel')
-        .onClick(() => this.close()));
+        .onClick(() => {
+          this.close();
+          this.onCancel();
+        }));
   }
 
   /** Clears the modal content on close to prevent DOM leaks. */

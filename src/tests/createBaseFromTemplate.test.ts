@@ -351,48 +351,51 @@ describe('TemplateConfigurationModal', () => {
   // ── create() ───────────────────────────────────────────────────────────────
 
   describe('create()', () => {
-    it('calls templateFileManager.createBaseFromTemplate with the template, output path, and values', async () => {
+    it('calls templateFileManager.writeBaseFromTemplate with the template, output path, and values', async () => {
       const resolvedParams: ResolvedParams = { taskLocation: 'Tasks' };
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       (modal as any).values = resolvedParams;
       await (modal as any).create();
-      expect(plugin.templateFileIO.createBaseFromTemplate).toHaveBeenCalledWith(template, 'my-template', resolvedParams);
+      expect(plugin.templateFileIO.writeBaseFromTemplate).toHaveBeenCalledWith(template, 'my-template', resolvedParams);
     });
 
-    it('calls templateFileManager.createBaseFromTemplate for plugin templates', async () => {
+    it('calls templateFileManager.writeBaseFromTemplate for plugin templates', async () => {
       const pluginTemplate = new QualifiedTemplateSource('my-plugin', 'dashboard');
       const modal = new TemplateConfigurationModal(plugin.app, plugin, pluginTemplate, {});
       await (modal as any).create();
-      expect(plugin.templateFileIO.createBaseFromTemplate).toHaveBeenCalledWith(pluginTemplate, 'dashboard', {});
+      expect(plugin.templateFileIO.writeBaseFromTemplate).toHaveBeenCalledWith(pluginTemplate, 'dashboard', {});
     });
 
-    it('calls templateFileManager.writeBaseFromTemplate and not createBaseFromTemplate when overwrite=true', async () => {
+    it('calls templateFileManager.writeBaseFromTemplate and not createBaseFromTemplate when overwrite is confirmed', async () => {
       const resolvedParams: ResolvedParams = { x: 'val' };
+      plugin.app.vault.getAbstractFileByPath.mockReturnValue({} /* existing file */);
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       (modal as any).values = resolvedParams;
-      await (modal as any).create(true);
+      vi.spyOn(modal as any, 'confirmOverwrite').mockResolvedValue(true);
+      await (modal as any).create();
       expect(plugin.templateFileIO.writeBaseFromTemplate).toHaveBeenCalledWith(template, 'my-template', resolvedParams);
       expect(plugin.templateFileIO.createBaseFromTemplate).not.toHaveBeenCalled();
     });
 
-    it('opens a ConfirmOverwriteModal and does not call createBaseFromTemplate when file exists', async () => {
+    it('does not write when file exists and user cancels the overwrite dialog', async () => {
       plugin.app.vault.getAbstractFileByPath.mockReturnValue({} /* existing file */);
-      const openSpy = vi.spyOn(Modal.prototype, 'open');
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
-      await (modal as any).create(false);
-      expect(openSpy).toHaveBeenCalledOnce();
-      expect(plugin.templateFileIO.createBaseFromTemplate).not.toHaveBeenCalled();
+      vi.spyOn(modal as any, 'confirmOverwrite').mockResolvedValue(false);
+      await (modal as any).create();
+      expect(plugin.templateFileIO.writeBaseFromTemplate).not.toHaveBeenCalled();
     });
 
-    it('shows a Notice containing "Created" after a successful createBaseFromTemplate', async () => {
+    it('shows a Notice containing "Created" after writing a new file', async () => {
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       await (modal as any).create();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Created'));
     });
 
-    it('shows a Notice containing "Overwrote" after a successful writeBaseFromTemplate', async () => {
+    it('shows a Notice containing "Overwrote" after a confirmed overwrite', async () => {
+      plugin.app.vault.getAbstractFileByPath.mockReturnValue({} /* existing file */);
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
-      await (modal as any).create(true);
+      vi.spyOn(modal as any, 'confirmOverwrite').mockResolvedValue(true);
+      await (modal as any).create();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Overwrote'));
     });
 
@@ -404,9 +407,11 @@ describe('TemplateConfigurationModal', () => {
     });
 
     it('calls close() after a successful overwrite', async () => {
+      plugin.app.vault.getAbstractFileByPath.mockReturnValue({} /* existing file */);
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       const closeSpy = vi.spyOn(modal, 'close');
-      await (modal as any).create(true);
+      vi.spyOn(modal as any, 'confirmOverwrite').mockResolvedValue(true);
+      await (modal as any).create();
       expect(closeSpy).toHaveBeenCalledOnce();
     });
 
@@ -426,17 +431,19 @@ describe('TemplateConfigurationModal', () => {
       expect(plugin.app.vault.getAbstractFileByPath).toHaveBeenCalledWith('my-file.base');
     });
 
-    it('shows an error Notice when templateFileManager.createBaseFromTemplate throws', async () => {
-      plugin.templateFileIO.createBaseFromTemplate.mockRejectedValue(new Error('YAML parse error'));
+    it('shows an error Notice when templateFileManager.writeBaseFromTemplate throws', async () => {
+      plugin.templateFileIO.writeBaseFromTemplate.mockRejectedValue(new Error('YAML parse error'));
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
       await (modal as any).create();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('YAML parse error'), 0);
     });
 
-    it('shows an error Notice when templateFileManager.writeBaseFromTemplate throws and does not rethrow', async () => {
+    it('shows an error Notice when templateFileManager.writeBaseFromTemplate throws on overwrite and does not rethrow', async () => {
+      plugin.app.vault.getAbstractFileByPath.mockReturnValue({} /* existing file */);
       plugin.templateFileIO.writeBaseFromTemplate.mockRejectedValue(new Error('Disk full'));
       const modal = new TemplateConfigurationModal(plugin.app, plugin, template, {});
-      await expect((modal as any).create(true)).resolves.not.toThrow();
+      vi.spyOn(modal as any, 'confirmOverwrite').mockResolvedValue(true);
+      await expect((modal as any).create()).resolves.not.toThrow();
       expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Disk full'), 0);
     });
   });
@@ -451,7 +458,7 @@ describe('ConfirmOverwriteModal', () => {
 
   it('onClose empties contentEl', () => {
     const app = {} as any;
-    const modal = new ConfirmOverwriteModal(app, 'some/path.base', vi.fn());
+    const modal = new ConfirmOverwriteModal(app, 'some/path.base', vi.fn(), vi.fn());
     modal.onClose();
     expect(modal.contentEl.empty).toHaveBeenCalledOnce();
   });

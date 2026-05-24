@@ -35,19 +35,14 @@ pb-metadata:
       description: Direction to sort rows in the view.
       type: enum
       options:
-        - Ascending
-        - Descending
-        - Invalid
-      default: Ascending
+        - ASC
+        - DESC
+      default: ASC
 type: table
-name: !exp params.viewName
+name: !param params.viewName
 sort:
   - property: file.name
-    direction: !fnc |
-      const dir = params.sortDirection;
-      if (dir === 'Ascending') return 'ASC';
-      if (dir === 'Descending') return 'DESC';
-      return 'ASC';
+    direction: !param params.sortDirection
 `;
 
 // ── Template: debug ──────────────────────────────────────────────────────────
@@ -82,13 +77,13 @@ pb-metadata:
       description: Only include items on or after this date.
       type: date
       optional: true
-      defaultExpr: "new Date().toISOString().slice(0, 10)"
+      defaultExpr: "{{today}}"
     sinceDateTime:
       label: Since date/time
       description: Only include items at or after this exact time.
       type: datetime
       default: "2000-01-01T00:00"
-      defaultExpr: "this expression is intentionally invalid"
+      defaultExpr: "{{now}}"
 views:
   - !sub debug:view
 `;

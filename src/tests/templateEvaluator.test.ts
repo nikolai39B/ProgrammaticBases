@@ -313,15 +313,15 @@ describe('TemplateEvaluator.evaluateTemplate (external source)', () => {
   });
 });
 
-// ─── !exp tag ─────────────────────────────────────────────────────────────────
+// ─── !param tag ─────────────────────────────────────────────────────────────────
 
-describe('TemplateEvaluator — !exp tag', () => {
-  // Note: !exp values containing {{ must be quoted in YAML since { is a
-  // flow-mapping delimiter. E.g.  filter: !exp "{{folder}}/tasks"
+describe('TemplateEvaluator — !param tag', () => {
+  // Note: !param values containing {{ must be quoted in YAML since { is a
+  // flow-mapping delimiter. E.g.  filter: !param "{{folder}}/tasks"
 
   it('interpolates a param value into a string', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': "value: !exp '{{taskLocation}}/boards'" } }],
+      ['test', { name: 'test', templates: { 'main': "value: !param '{{taskLocation}}/boards'" } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.evaluateTemplate(
@@ -333,7 +333,7 @@ describe('TemplateEvaluator — !exp tag', () => {
 
   it('substitutes multiple params in one expression', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': "value: !exp '{{prefix}}-{{suffix}}'" } }],
+      ['test', { name: 'test', templates: { 'main': "value: !param '{{prefix}}-{{suffix}}'" } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.evaluateTemplate(
@@ -345,7 +345,7 @@ describe('TemplateEvaluator — !exp tag', () => {
 
   it('replaces missing params with empty string', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': "value: !exp 'hello {{missing}} world'" } }],
+      ['test', { name: 'test', templates: { 'main': "value: !param 'hello {{missing}} world'" } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.evaluateTemplate(
@@ -356,7 +356,7 @@ describe('TemplateEvaluator — !exp tag', () => {
 
   it('returns the string unchanged when no placeholders are present', async () => {
     const sources = new Map([
-      ['test', { name: 'test', templates: { 'main': 'value: !exp just a string' } }],
+      ['test', { name: 'test', templates: { 'main': 'value: !param just a string' } }],
     ]);
     const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.evaluateTemplate(
@@ -460,8 +460,8 @@ describe('TemplateEvaluator.collectParams (external source)', () => {
     expect(result.loc!.specs['b']!.type).toBe('string');
   });
 
-  it('treats !exp as a no-op during harvest', async () => {
-    const sources = new Map([['test', { name: 'test', templates: { 'main': "value: !exp '{{x}}'" } }]]);
+  it('treats !param as a no-op during harvest', async () => {
+    const sources = new Map([['test', { name: 'test', templates: { 'main': "value: !param '{{x}}'" } }]]);
     const { evaluator } = makeEvaluator({}, sources);
     const result = await evaluator.collectTemplateParams(new QualifiedTemplateSource('test', 'main'));
     expect(result).toEqual({});

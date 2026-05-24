@@ -4,8 +4,7 @@
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Programmatic wrapper for creating and modifying obsidian bases.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"author": "Will Hauber",
+	"authorUrl": "https://github.com/nikolai39B",
 	"isDesktopOnly": false
 }
